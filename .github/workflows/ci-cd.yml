@@ -1,0 +1,39 @@
+name: School Portal CI/CD
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+    - name: Checkout Repository
+      uses: actions/checkout@v3
+
+    - name: Setup Java
+      uses: actions/setup-java@v3
+      with:
+        distribution: temurin
+        java-version: 21
+
+    - name: Build Backend
+      run: mvn clean package -DskipTests
+
+    - name: Setup Node
+      uses: actions/setup-node@v3
+      with:
+        node-version: 20
+
+    - name: Build Frontend
+      run: |
+        cd frontend
+        npm install
+        npm run build
+
+    - name: Build Docker Images
+      run: docker compose build
