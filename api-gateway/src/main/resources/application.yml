@@ -1,0 +1,176 @@
+# ═══════════════════════════════════════════════
+# API GATEWAY — application.yml
+# Spring Boot 3.3.4 | School Management Portal
+# ═══════════════════════════════════════════════
+
+server:
+  port: 8080
+  shutdown: graceful
+
+spring:
+  application:
+    name: api-gateway
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:local}
+  lifecycle:
+    timeout-per-shutdown-phase: 20s
+
+  # ── Spring Cloud Gateway ────────────────────
+  cloud:
+    gateway:
+      discovery:
+        locator:
+          enabled: true
+          lower-case-service-id: true
+      httpclient:
+        connect-timeout: 5000
+        response-timeout: 30s
+      default-filters:
+        - DedupeResponseHeader=Access-Control-Allow-Credentials Access-Control-Allow-Origin
+
+      # ── Routes ─────────────────────────────
+      routes:
+        # Auth Service — PUBLIC (no JWT check)
+        - id: auth-service
+          uri: lb://auth-service
+          predicates:
+            - Path=/api/auth/**
+          filters:
+            - StripPrefix=1
+
+        # Student Service — PROTECTED
+        - id: student-service
+          uri: lb://student-service
+          predicates:
+            - Path=/api/students/**
+          filters:
+            - StripPrefix=1
+            - name: JwtAuthFilter
+
+        # Academic Service — PROTECTED
+        - id: academic-service
+          uri: lb://academic-service
+          predicates:
+            - Path=/api/academic/**
+          filters:
+            - StripPrefix=1
+            - name: JwtAuthFilter
+
+        # Teacher Service — PUBLIC directory + PROTECTED rest
+        - id: teacher-service-public
+          uri: lb://teacher-service
+          predicates:
+            - Path=/api/teachers/public/**
+          filters:
+            - StripPrefix=1
+
+        - id: teacher-service
+          uri: lb://teacher-service
+          predicates:
+            - Path=/api/teachers/**
+          filters:
+            - StripPrefix=1
+            - name: JwtAuthFilter
+
+        # Content Service — PROTECTED
+        - id: content-service
+          uri: lb://content-service
+          predicates:
+            - Path=/api/content/**
+          filters:
+            - StripPrefix=1
+            - name: JwtAuthFilter
+
+        # Calendar Service — PUBLIC events + PROTECTED admin
+        - id: calendar-service-public
+          uri: lb://calendar-service
+          predicates:
+            - Path=/api/calendar/public/**
+          filters:
+            - StripPrefix=1
+
+        - id: calendar-service
+          uri: lb://calendar-service
+          predicates:
+            - Path=/api/calendar/**
+          filters:
+            - StripPrefix=1
+            - name: JwtAuthFilter
+
+        # Online Test Service — PROTECTED
+        - id: online-test-service
+          uri: lb://online-test-service
+          predicates:
+            - Path=/api/tests/**
+          filters:
+            - StripPrefix=1
+            - name: JwtAuthFilter
+
+        # Notification Service — PROTECTED
+        - id: notification-service
+          uri: lb://notification-service
+          predicates:
+            - Path=/api/notifications/**
+          filters:
+            - StripPrefix=1
+            - name: JwtAuthFilter
+
+      # ── CORS ───────────────────────────────
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowedOrigins:
+              - "http://localhost:3000"
+              - "http://school-frontend:80"
+            allowedMethods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+              - PATCH
+              - OPTIONS
+            allowedHeaders: "*"
+            allowCredentials: true
+            maxAge: 3600
+
+# ── App Config (JWT + Public Paths) ──────────
+app:
+  jwt:
+    secret: ${JWT_SECRET:schoolPortalSecretKey2026VeryLongAndSecure}
+  public-paths:
+    - /api/auth/login
+    - /api/auth/refresh
+    - /api/teachers/public/**
+    - /api/calendar/public/**
+
+# ── Eureka ────────────────────────────────────
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_SERVER_URL:http://localhost:8761/eureka}
+    registry-fetch-interval-seconds: 10
+  instance:
+    prefer-ip-address: true
+    lease-renewal-interval-in-seconds: 10
+    lease-expiration-duration-in-seconds: 30
+
+# ── Actuator ─────────────────────────────────
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,gateway
+  endpoint:
+    health:
+      show-details: always
+      probes:
+        enabled: true
+
+# ── Logging ───────────────────────────────────
+logging:
+  level:
+    root: INFO
+    org.springframework.cloud.gateway: INFO
+    com.school.gateway: DEBUG
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
