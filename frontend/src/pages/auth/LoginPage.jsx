@@ -4,7 +4,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
-import { login, clearError, selectAuthLoading, selectAuthError, selectIsAuthenticated, selectRole } from '../store/slices/authSlice';
+import { login, clearError, selectAuthLoading, selectAuthError, selectIsAuthenticated, selectRole } from '../../store/slices/authSlice';
 
 /* ─────────────────────────────────────────────────────────────────
    HIDDEN STAFF LOGIN — accessible only via /portal-login

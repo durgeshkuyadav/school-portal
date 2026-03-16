@@ -16,7 +16,7 @@ import SchoolIcon from '@mui/icons-material/School';
 import CloseIcon from '@mui/icons-material/Close';
 import SaveIcon from '@mui/icons-material/Save';
 import { studentApi } from '../../api/services';
-import { useAppSettings } from '../context/AppSettingsContext';
+import { useAppSettings } from '../../context/AppSettingsContext';
 import { useSelector } from 'react-redux';
 import { selectUser } from '../../store/slices/authSlice';
 

@@ -17,7 +17,7 @@ import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
 import CloseIcon from '@mui/icons-material/Close';
 import SaveIcon from '@mui/icons-material/Save';
 import apiClient from '../../api/apiClient';
-import { useAppSettings } from '../context/AppSettingsContext';
+import { useAppSettings } from '../../context/AppSettingsContext';
 import { useSelector } from 'react-redux';
 import { selectUser } from '../../store/slices/authSlice';
 
