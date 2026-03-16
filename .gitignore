@@ -1,0 +1,58 @@
+# ═══════════════════════════════════════
+# SCHOOL PORTAL — .gitignore
+# ═══════════════════════════════════════
+
+# ── Java / Maven ───────────────────────
+**/target/
+**/.mvn/
+**/mvnw
+**/mvnw.cmd
+**/*.jar
+**/*.war
+**/*.class
+**/.classpath
+**/.project
+**/.settings/
+**/.factorypath
+
+# ── Node / React ───────────────────────
+**/node_modules/
+**/build/
+frontend/.env.local
+frontend/.env.development.local
+frontend/.env.test.local
+frontend/.env.production.local
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+
+# ── Environment / Secrets ──────────────
+.env
+.env.*
+!.env.example
+
+# ── Docker volumes / data ──────────────
+docker-data/
+mysql-data/
+mongo-data/
+redis-data/
+
+# ── IDE files ──────────────────────────
+.idea/
+*.iml
+*.iws
+*.ipr
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# ── Logs ───────────────────────────────
+*.log
+logs/
+docker-up.log
+
+# ── OS ─────────────────────────────────
+.DS_Store
+desktop.ini

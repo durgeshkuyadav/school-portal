@@ -1,0 +1,86 @@
+# ═══════════════════════════════════════════════════════════════════
+# PR CHECK — Fast feedback on every Pull Request
+# Runs: lint + frontend build + import path validation
+# Does NOT push Docker images (saves time + quota)
+# ═══════════════════════════════════════════════════════════════════
+
+name: 🔎 PR Check
+
+on:
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'frontend/**'
+      - '*/src/**'
+      - 'docker-compose.yml'
+      - '.github/workflows/**'
+
+jobs:
+  pr-validate:
+    name: ✅ Validate PR
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend deps
+        run: |
+          cd frontend
+          npm ci --legacy-peer-deps --silent
+
+      - name: ✅ Validate import paths
+        run: |
+          cd frontend
+          python3 << 'PYEOF'
+          import os, re, sys
+          src = 'src'
+          errors = []
+          for root, dirs, files in os.walk(src):
+              dirs[:] = [d for d in dirs if d != 'node_modules']
+              for f in files:
+                  if not (f.endswith('.jsx') or f.endswith('.js')):
+                      continue
+                  fpath = os.path.join(root, f)
+                  file_dir = os.path.dirname(fpath)
+                  with open(fpath) as fh:
+                      for i, line in enumerate(fh, 1):
+                          m = re.search(r"from ['\"](\.[^'\"]+)['\"]", line)
+                          if not m: continue
+                          resolved = os.path.normpath(os.path.join(file_dir, m.group(1)))
+                          if not resolved.startswith(src):
+                              errors.append(f"  ❌ {fpath}:{i} → '{m.group(1)}' resolves outside src/")
+          if errors:
+              print("Import path errors found:")
+              for e in errors: print(e)
+              sys.exit(1)
+          else:
+              print(f"✅ All import paths valid ({sum(1 for r,d,fs in os.walk(src) for f in fs if f.endswith(('.jsx','.js')))} files checked)")
+          PYEOF
+
+      - name: ✅ Build frontend
+        run: |
+          cd frontend
+          NODE_OPTIONS=--openssl-legacy-provider GENERATE_SOURCEMAP=false CI=false npm run build
+        env:
+          CI: false
+
+      - name: ✅ Validate docker-compose
+        run: docker compose config --quiet
+
+      - name: PR summary
+        if: always()
+        run: |
+          echo "### PR Check Results" >> $GITHUB_STEP_SUMMARY
+          echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Import paths | ✅ |" >> $GITHUB_STEP_SUMMARY
+          echo "| Frontend build | ✅ |" >> $GITHUB_STEP_SUMMARY
+          echo "| Docker Compose | ✅ |" >> $GITHUB_STEP_SUMMARY

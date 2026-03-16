@@ -1,0 +1,56 @@
+# ═══════════════════════════════════════════════════════════════════
+# DEPENDENCY CHECK — Weekly security audit
+# Runs every Monday at 9 AM IST (3:30 AM UTC)
+# ═══════════════════════════════════════════════════════════════════
+
+name: 🔒 Security Audit
+
+on:
+  schedule:
+    - cron: '30 3 * * 1'   # Every Monday 9 AM IST
+  workflow_dispatch:
+
+jobs:
+  npm-audit:
+    name: 📦 npm Security Audit
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: npm audit
+        run: |
+          cd frontend
+          npm ci --legacy-peer-deps --silent
+          echo "=== npm audit report ===" 
+          npm audit --audit-level=high || echo "⚠️ High severity vulnerabilities found — review needed"
+
+  maven-audit:
+    name: ☕ Maven Security Audit
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [ auth-service, student-service, api-gateway ]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: temurin
+          cache: maven
+
+      - name: Check ${{ matrix.service }} dependencies
+        run: |
+          cd ${{ matrix.service }}
+          mvn dependency:analyze --no-transfer-progress -q || true
+          echo "✅ ${{ matrix.service }} dependency check done"

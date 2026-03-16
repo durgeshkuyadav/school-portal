@@ -1,0 +1,77 @@
+# ═══════════════════════════════════════════════
+# NOTIFICATION SERVICE — application.yml
+# Spring Boot 3.3.4 | School Management Portal
+# ═══════════════════════════════════════════════
+
+server:
+  port: 8089
+  shutdown: graceful
+
+spring:
+  application:
+    name: notification-service
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:local}
+  lifecycle:
+    timeout-per-shutdown-phase: 20s
+
+  # ── Disable mail auto-config by default ────
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.mail.MailSenderAutoConfiguration
+      - org.springframework.boot.autoconfigure.mail.MailSenderValidatorAutoConfiguration
+
+  # ── Kafka Consumer ────────────────────────
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP:localhost:9092}
+    consumer:
+      group-id: notification-group
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+      max-poll-records: 10
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "*"
+        spring.json.use.type.headers: false
+        isolation.level: read_committed
+    listener:
+      ack-mode: MANUAL_IMMEDIATE
+      concurrency: 3
+
+# ── Eureka ────────────────────────────────────
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_SERVER_URL:http://localhost:8761/eureka}
+    registry-fetch-interval-seconds: 10
+  instance:
+    prefer-ip-address: true
+    lease-renewal-interval-in-seconds: 10
+    lease-expiration-duration-in-seconds: 30
+
+# ── Actuator ─────────────────────────────────
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always
+      probes:
+        enabled: true
+
+# ── Mail Toggle (default OFF) ─────────────────
+app:
+  mail:
+    enabled: ${MAIL_ENABLED:false}
+
+# ── Logging ───────────────────────────────────
+logging:
+  level:
+    root: INFO
+    com.school.notification: DEBUG
+    org.springframework.kafka: WARN
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
