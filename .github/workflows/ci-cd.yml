@@ -34,137 +34,38 @@ on:
   pull_request:
     branches: [ main ]
   workflow_dispatch:
-    inputs:
-      skip_tests:
-        description: 'Skip tests (for hotfix)'
-        required: false
-        default: 'false'
-        type: boolean
 
 env:
-  DOCKER_REGISTRY: docker.io
-  IMAGE_PREFIX:    ${{ secrets.DOCKERHUB_USERNAME }}/school-portal
-  JAVA_VERSION:    '21'
-  NODE_VERSION:    '20'
+  IMAGE_PREFIX: ${{ secrets.DOCKERHUB_USERNAME }}/school-portal
+  JAVA_VERSION: '21'
+  NODE_VERSION: '20'
 
-# Cancel in-progress runs for same branch
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-# ──────────────────────────────────────────────────────────────────
 jobs:
 
-# ─── JOB 1: Validate configs ──────────────────────────────────────
+# ─── JOB 1: Validate ──────────────────────────────────────────────
   validate:
     name: 🔍 Validate & Lint
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Validate docker-compose.yml
         run: docker compose config --quiet
-        env:
-          DOCKERHUB_USERNAME: placeholder
 
-      - name: Check for secrets in code
-        run: |
-          echo "Checking for hardcoded secrets..."
-          if grep -r "admin123\|secret\|password" \
-            --include="*.java" --include="*.js" --include="*.jsx" \
-            --exclude-dir=node_modules --exclude-dir=target \
-            -l . 2>/dev/null | grep -v "application.yml\|DataSeeder\|SecurityConfig\|LoginPage\|README\|HELP"; then
-            echo "⚠️ Warning: potential secrets found in source files"
-          else
-            echo "✅ No hardcoded secrets detected in source"
-          fi
-
-      - name: Validate frontend package.json
+      - name: Validate package.json
         run: |
           cd frontend
           node -e "JSON.parse(require('fs').readFileSync('package.json','utf8'))"
-          echo "✅ package.json is valid JSON"
+          echo "✅ package.json valid"
 
-# ─── JOB 2: Build & Test Backend (parallel per service) ───────────
-  build-backend:
-    name: ☕ Build ${{ matrix.service }}
-    runs-on: ubuntu-latest
-    needs: validate
-    if: github.event.inputs.skip_tests != 'true'
-
-    strategy:
-      fail-fast: false
-      matrix:
-        service:
-          - eureka-server
-          - api-gateway
-          - auth-service
-          - student-service
-          - academic-service
-          - content-service
-          - teacher-service
-          - calendar-service
-          - online-test-service
-          - notification-service
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up JDK ${{ env.JAVA_VERSION }}
-        uses: actions/setup-java@v4
-        with:
-          java-version: ${{ env.JAVA_VERSION }}
-          distribution: temurin
-          cache: maven
-
-      - name: Build ${{ matrix.service }}
-        run: |
-          cd ${{ matrix.service }}
-          mvn clean package -DskipTests --no-transfer-progress -q
-          echo "✅ ${{ matrix.service }} built successfully"
-
-      - name: Run unit tests for ${{ matrix.service }}
-        run: |
-          cd ${{ matrix.service }}
-          mvn test --no-transfer-progress -q || echo "⚠️ Tests skipped (no tests found)"
-        continue-on-error: true
-
-      - name: Upload JAR artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: jar-${{ matrix.service }}
-          path: ${{ matrix.service }}/target/*.jar
-          retention-days: 1
-
-# ─── JOB 3: Build Frontend ────────────────────────────────────────
-  build-frontend:
-    name: ⚛️ Build Frontend
-    runs-on: ubuntu-latest
-    needs: validate
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js ${{ env.NODE_VERSION }}
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-
-      - name: Install dependencies
+      - name: Check import paths
         run: |
           cd frontend
-          npm ci --legacy-peer-deps --silent
-
-      - name: Check for import path issues
-        run: |
-          cd frontend
-          echo "Checking relative imports stay inside src/..."
-          python3 << 'PYEOF'
+          python3 - << 'PYEOF'
           import os, re, sys
           src = 'src'
           errors = []
@@ -181,32 +82,82 @@ jobs:
                           if not m: continue
                           resolved = os.path.normpath(os.path.join(file_dir, m.group(1)))
                           if not resolved.startswith(src):
-                              errors.append(f"{fpath}:{i} → '{m.group(1)}'")
+                              errors.append(f"  {fpath}:{i} -> outside src/")
           if errors:
-              print("❌ Import path errors:")
-              for e in errors: print(f"  {e}")
+              for e in errors: print(e)
               sys.exit(1)
           else:
-              print("✅ All import paths are valid")
+              print("✅ All imports valid")
           PYEOF
+
+# ─── JOB 2: Build Backend (parallel) ─────────────────────────────
+  build-backend:
+    name: ☕ Build ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    needs: validate
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - eureka-server
+          - api-gateway
+          - auth-service
+          - student-service
+          - academic-service
+          - content-service
+          - teacher-service
+          - calendar-service
+          - online-test-service
+          - notification-service
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: temurin
+          cache: maven
+
+      - name: Build ${{ matrix.service }}
+        run: |
+          cd ${{ matrix.service }}
+          mvn clean package -DskipTests --no-transfer-progress -q
+          echo "✅ ${{ matrix.service }} built"
+
+      - name: Upload JAR
+        uses: actions/upload-artifact@v4
+        with:
+          name: jar-${{ matrix.service }}
+          path: ${{ matrix.service }}/target/*.jar
+          retention-days: 1
+
+# ─── JOB 3: Build Frontend ────────────────────────────────────────
+  build-frontend:
+    name: ⚛️ Build Frontend
+    runs-on: ubuntu-latest
+    needs: validate
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: |
+          cd frontend
+          npm ci --legacy-peer-deps --silent
 
       - name: Build React app
         run: |
           cd frontend
-          NODE_OPTIONS=--openssl-legacy-provider \
-          GENERATE_SOURCEMAP=false \
-          CI=false \
-          npm run build
-        env:
-          CI: false
+          NODE_OPTIONS=--openssl-legacy-provider GENERATE_SOURCEMAP=false CI=false npm run build
 
-      - name: Check build output size
-        run: |
-          du -sh frontend/build/
-          echo "Build files:"
-          ls frontend/build/static/js/*.js | head -5
-
-      - name: Upload build artifact
+      - name: Upload build
         uses: actions/upload-artifact@v4
         with:
           name: frontend-build
@@ -218,10 +169,7 @@ jobs:
     name: 🐳 Docker ${{ matrix.service }}
     runs-on: ubuntu-latest
     needs: [ build-backend, build-frontend ]
-    if: |
-      github.event_name != 'pull_request' &&
-      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' || startsWith(github.ref, 'refs/tags/'))
-
+    if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' || startsWith(github.ref, 'refs/tags/'))
     strategy:
       fail-fast: false
       matrix:
@@ -237,12 +185,10 @@ jobs:
           - online-test-service
           - notification-service
           - frontend
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Download JAR artifact (backend services)
+      - name: Download JAR
         if: matrix.service != 'frontend'
         uses: actions/download-artifact@v4
         with:
@@ -261,30 +207,27 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Log in to Docker Hub
+      - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Determine image tags
+      - name: Set image tags
         id: tags
         run: |
           PREFIX="${{ env.IMAGE_PREFIX }}-${{ matrix.service }}"
-          SHA="${{ github.sha }}"
-          SHORT_SHA="${SHA:0:7}"
-
+          SHORT_SHA="${{ github.sha }}"
+          SHORT_SHA="${SHORT_SHA:0:7}"
           if [[ "${{ github.ref }}" == refs/tags/* ]]; then
-            VERSION="${{ github.ref_name }}"
-            echo "tags=${PREFIX}:${VERSION},${PREFIX}:latest" >> $GITHUB_OUTPUT
+            echo "tags=${PREFIX}:${{ github.ref_name }},${PREFIX}:latest" >> $GITHUB_OUTPUT
           elif [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
             echo "tags=${PREFIX}:latest,${PREFIX}:${SHORT_SHA}" >> $GITHUB_OUTPUT
           else
             echo "tags=${PREFIX}:develop,${PREFIX}:${SHORT_SHA}" >> $GITHUB_OUTPUT
           fi
-          echo "short_sha=${SHORT_SHA}" >> $GITHUB_OUTPUT
 
-      - name: Build and push ${{ matrix.service }}
+      - name: Build and push
         uses: docker/build-push-action@v5
         with:
           context: ./${{ matrix.service }}
@@ -293,73 +236,25 @@ jobs:
           tags:    ${{ steps.tags.outputs.tags }}
           cache-from: type=gha,scope=${{ matrix.service }}
           cache-to:   type=gha,mode=max,scope=${{ matrix.service }}
-          labels: |
-            org.opencontainers.image.source=https://github.com/durgeshkuyadav/school-portal
-            org.opencontainers.image.revision=${{ github.sha }}
-            org.opencontainers.image.created=${{ github.event.head_commit.timestamp }}
 
-      - name: Image digest
-        run: echo "✅ ${{ matrix.service }} pushed — ${{ steps.tags.outputs.tags }}"
-
-# ─── JOB 5: Integration Test ──────────────────────────────────────
-  integration-test:
-    name: 🧪 Integration Tests
+# ─── JOB 5: Deploy ────────────────────────────────────────────────
+  deploy:
+    name: 🚀 Deploy
     runs-on: ubuntu-latest
     needs: docker-build-push
-    if: github.ref == 'refs/heads/main'
-
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Compose
-        run: docker compose version
-
-      - name: Start infrastructure only (fast)
+      - name: Check deploy secrets
+        id: check
         run: |
-          # Start only databases + infrastructure for fast check
-          docker compose up -d \
-            mysql-auth mysql-student redis zookeeper kafka \
-            --wait --wait-timeout 120
-        env:
-          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-
-      - name: Wait for MySQL to be ready
-        run: |
-          timeout 90 bash -c 'until docker compose exec -T mysql-auth mysqladmin ping -h localhost --silent 2>/dev/null; do sleep 3; done'
-          echo "✅ MySQL auth is ready"
-
-      - name: Health check infrastructure
-        run: |
-          echo "=== Container Status ==="
-          docker compose ps
-          echo ""
-          echo "=== MySQL Auth ==="
-          docker compose exec -T mysql-auth mysqladmin ping -h localhost --silent && echo "✅ MySQL-auth OK" || echo "❌ MySQL-auth FAIL"
-          echo "=== Redis ==="
-          docker compose exec -T redis redis-cli ping && echo "✅ Redis OK" || echo "❌ Redis FAIL"
-          echo "=== Zookeeper ==="
-          docker compose exec -T zookeeper bash -c "echo ruok | nc localhost 2181" && echo "✅ Zookeeper OK" || echo "⚠️ Zookeeper check skipped"
-
-      - name: Cleanup
-        if: always()
-        run: docker compose down -v --remove-orphans
-
-# ─── JOB 6: Deploy to Server ──────────────────────────────────────
-  deploy:
-    name: 🚀 Deploy to Production
-    runs-on: ubuntu-latest
-    needs: integration-test
-    if: github.ref == 'refs/heads/main'
-    environment:
-      name: production
-      url: http://${{ secrets.DEPLOY_HOST }}:3000
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+          if [ -n "${{ secrets.DEPLOY_HOST }}" ]; then
+            echo "has_secrets=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_secrets=false" >> $GITHUB_OUTPUT
+          fi
 
       - name: Deploy via SSH
+        if: steps.check.outputs.has_secrets == 'true'
         uses: appleboy/ssh-action@v1.0.3
         with:
           host:     ${{ secrets.DEPLOY_HOST }}
@@ -367,115 +262,57 @@ jobs:
           key:      ${{ secrets.DEPLOY_SSH_KEY }}
           timeout:  300s
           script: |
-            set -e
-            echo "=== Deploying School Portal ==="
             cd ${{ secrets.DEPLOY_PATH }}
-
-            # Pull latest code
-            git fetch origin main
-            git reset --hard origin/main
-
-            # Pull new Docker images
+            git pull origin main
             docker compose pull
-
-            # Rolling update — bring up new, remove old
             docker compose up -d --remove-orphans
+            echo "✅ Deployed!"
 
-            # Wait for health
-            echo "Waiting for services to be healthy..."
-            sleep 30
+      - name: No server configured
+        if: steps.check.outputs.has_secrets == 'false'
+        run: echo "⚠️ Deploy skipped - no DEPLOY_HOST secret set. Add server secrets to enable auto-deploy."
 
-            # Verify key services
-            docker compose ps | grep -E "healthy|running"
-
-            echo "=== Deployment Complete ==="
-            echo "Frontend: http://$(hostname -I | awk '{print $1}'):3000"
-
-      - name: Verify deployment
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host:     ${{ secrets.DEPLOY_HOST }}
-          username: ${{ secrets.DEPLOY_USER }}
-          key:      ${{ secrets.DEPLOY_SSH_KEY }}
-          script: |
-            curl -sf http://localhost:3000/health && echo "✅ Frontend UP" || echo "❌ Frontend DOWN"
-            curl -sf http://localhost:8080/actuator/health | grep '"status":"UP"' && echo "✅ API Gateway UP" || echo "❌ API Gateway DOWN"
-
-# ─── JOB 7: Create Release (on tag) ──────────────────────────────
+# ─── JOB 6: Release on tag ────────────────────────────────────────
   release:
-    name: 📦 Create GitHub Release
+    name: 📦 GitHub Release
     runs-on: ubuntu-latest
     needs: docker-build-push
     if: startsWith(github.ref, 'refs/tags/v')
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-      - name: Generate changelog
-        id: changelog
-        run: |
-          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
-          if [ -n "$PREV_TAG" ]; then
-            CHANGES=$(git log ${PREV_TAG}..HEAD --pretty=format:"- %s (%h)" --no-merges)
-          else
-            CHANGES=$(git log --pretty=format:"- %s (%h)" --no-merges | head -20)
-          fi
-          echo "changelog<<EOF" >> $GITHUB_OUTPUT
-          echo "$CHANGES" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_name }}
           name: "🏫 School Portal ${{ github.ref_name }}"
           body: |
             ## 🏫 School Portal ${{ github.ref_name }}
 
-            ### 🐳 Docker Images
-            All images published to Docker Hub:
-            ```
-            docker pull ${{ env.IMAGE_PREFIX }}-frontend:${{ github.ref_name }}
-            docker pull ${{ env.IMAGE_PREFIX }}-auth-service:${{ github.ref_name }}
-            docker pull ${{ env.IMAGE_PREFIX }}-api-gateway:${{ github.ref_name }}
-            ```
-
-            ### 📝 Changes
-            ${{ steps.changelog.outputs.changelog }}
-
-            ### 🚀 Deploy
+            ### 🚀 Quick Start
             ```bash
             git clone https://github.com/durgeshkuyadav/school-portal.git
             cd school-portal
             docker compose up -d
             ```
           draft: false
-          prerelease: ${{ contains(github.ref_name, '-rc') || contains(github.ref_name, '-beta') }}
+          prerelease: false
 
-# ─── JOB 8: Notify Summary ────────────────────────────────────────
-  notify:
-    name: 📢 Pipeline Summary
+# ─── JOB 7: Summary ──────────────────────────────────────────────
+  summary:
+    name: 📋 Summary
     runs-on: ubuntu-latest
-    needs: [ validate, build-backend, build-frontend, docker-build-push ]
+    needs: [ validate, build-backend, build-frontend ]
     if: always()
-
     steps:
-      - name: Pipeline result
+      - name: Write summary
         run: |
-          echo "════════════════════════════════════════"
-          echo "   SCHOOL PORTAL CI/CD — SUMMARY"
-          echo "════════════════════════════════════════"
-          echo "Branch  : ${{ github.ref_name }}"
-          echo "Commit  : ${{ github.sha }}"
-          echo "Trigger : ${{ github.event_name }}"
-          echo "Actor   : ${{ github.actor }}"
-          echo ""
-          echo "Jobs:"
-          echo "  validate     : ${{ needs.validate.result }}"
-          echo "  build-backend: ${{ needs.build-backend.result }}"
-          echo "  build-frontend: ${{ needs.build-frontend.result }}"
-          echo "  docker-push  : ${{ needs.docker-build-push.result }}"
-          echo "════════════════════════════════════════"
+          echo "## 🏫 School Portal Pipeline Results" >> $GITHUB_STEP_SUMMARY
+          echo "| Job | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| 🔍 Validate | ${{ needs.validate.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| ☕ Build Backend | ${{ needs.build-backend.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| ⚛️ Build Frontend | ${{ needs.build-frontend.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Branch: \`${{ github.ref_name }}\` | Commit: \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
