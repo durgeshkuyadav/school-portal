@@ -14,8 +14,7 @@ import SchoolIcon from '@mui/icons-material/School';
 import PersonIcon from '@mui/icons-material/Person';
 import { useAppSettings } from '../context/AppSettingsContext';
 import { useSelector } from 'react-redux';
-import { selectUser } from '../../store/slices/authSlice';
-
+import { selectUser } from '../store/slices/authSlice';
 /* ═══════════════════════════════════════════════════════════════════
    SCIENCE LAB PAGE
    • Two main tabs: Teacher Instructions | Student Guide
