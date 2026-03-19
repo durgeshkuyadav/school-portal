@@ -1,13 +1,13 @@
 package com.school.notification.consumer;
 
-import com.school.notification.dto.NotificationEvent;
 import com.school.notification.service.EmailService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.springframework.kafka.annotation.KafkaListener;
-import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.stereotype.Component;
+
+import java.util.Map;
 
 @Component
 @RequiredArgsConstructor
@@ -16,57 +16,110 @@ public class NotificationConsumer {
 
     private final EmailService emailService;
 
-    @KafkaListener(topics = "result-published", groupId = "notification-group",
-                   containerFactory = "kafkaListenerContainerFactory")
-    public void onResultPublished(ConsumerRecord<String, NotificationEvent> record, Acknowledgment ack) {
+    // ✅ Topic name match karta hai AcademicEventProducer se
+    @KafkaListener(
+        topics = "school.results.published",
+        groupId = "notification-group",
+        containerFactory = "kafkaListenerContainerFactory"
+    )
+    public void onResultPublished(
+            ConsumerRecord<String, Map<String, Object>> record) {
         try {
-            NotificationEvent event = record.value();
-            log.info("📧 Result published event received: {}", event);
+            Map<String, Object> event = record.value();
+            log.info("📧 Result event: {}", event);
+
+            String email = (String) event.get("recipientEmail");
+            String examName = (String) event.getOrDefault(
+                "examName", "Exam");
+
             emailService.sendEmail(
-                event.getRecipientEmail(),
-                "Results Published — " + event.getTitle(),
-                event.getMessage()
+                email,
+                "✅ Results Published — " + examName,
+                buildResultBody(examName)
             );
-            ack.acknowledge();
         } catch (Exception e) {
-            log.error("Error processing result-published event: {}", e.getMessage());
-            ack.acknowledge(); // acknowledge anyway to avoid infinite retry
+            log.error("Error in result event: {}",
+                e.getMessage());
         }
     }
 
-    @KafkaListener(topics = "exam-created", groupId = "notification-group",
-                   containerFactory = "kafkaListenerContainerFactory")
-    public void onExamCreated(ConsumerRecord<String, NotificationEvent> record, Acknowledgment ack) {
+    // ✅ Topic name match karta hai AcademicEventProducer se
+    @KafkaListener(
+        topics = "school.exam.created",
+        groupId = "notification-group",
+        containerFactory = "kafkaListenerContainerFactory"
+    )
+    public void onExamCreated(
+            ConsumerRecord<String, Map<String, Object>> record) {
         try {
-            NotificationEvent event = record.value();
-            log.info("📅 Exam created event received: {}", event);
+            Map<String, Object> event = record.value();
+            log.info("📅 Exam event: {}", event);
+
+            String email = (String) event.get("recipientEmail");
+            String examName = (String) event.getOrDefault(
+                "examName", "Exam");
+
             emailService.sendEmail(
-                event.getRecipientEmail(),
-                "New Exam Scheduled — " + event.getTitle(),
-                event.getMessage()
+                email,
+                "📅 New Exam Scheduled — " + examName,
+                buildExamBody(examName)
             );
-            ack.acknowledge();
         } catch (Exception e) {
-            log.error("Error processing exam-created event: {}", e.getMessage());
-            ack.acknowledge();
+            log.error("Error in exam event: {}",
+                e.getMessage());
         }
     }
 
-    @KafkaListener(topics = "content-uploaded", groupId = "notification-group",
-                   containerFactory = "kafkaListenerContainerFactory")
-    public void onContentUploaded(ConsumerRecord<String, NotificationEvent> record, Acknowledgment ack) {
+    // ✅ Topic name match karta hai TaskEventProducer se
+    @KafkaListener(
+        topics = "school.task.assigned",
+        groupId = "notification-group",
+        containerFactory = "kafkaListenerContainerFactory"
+    )
+    public void onTaskAssigned(
+            ConsumerRecord<String, Map<String, Object>> record) {
         try {
-            NotificationEvent event = record.value();
-            log.info("📚 Content uploaded event received: {}", event);
+            Map<String, Object> event = record.value();
+            log.info("📋 Task event: {}", event);
+
+            String email = (String) event.get("recipientEmail");
+            String title = (String) event.getOrDefault(
+                "taskTitle", "Task");
+            String by = (String) event.getOrDefault(
+                "assignedByName", "Admin");
+
             emailService.sendEmail(
-                event.getRecipientEmail(),
-                "New Study Material — " + event.getTitle(),
-                event.getMessage()
+                email,
+                "📋 New Task Assigned — " + title,
+                buildTaskBody(title, by)
             );
-            ack.acknowledge();
         } catch (Exception e) {
-            log.error("Error processing content-uploaded event: {}", e.getMessage());
-            ack.acknowledge();
+            log.error("Error in task event: {}",
+                e.getMessage());
         }
+    }
+
+    private String buildResultBody(String examName) {
+        return "<h2>Results Published!</h2>"
+            + "<p>Results for <b>" + examName
+            + "</b> have been published.</p>"
+            + "<p>Login to the portal to check your results.</p>"
+            + "<br><small>Vidya Mandir School Portal</small>";
+    }
+
+    private String buildExamBody(String examName) {
+        return "<h2>New Exam Scheduled</h2>"
+            + "<p>Exam <b>" + examName
+            + "</b> has been scheduled.</p>"
+            + "<p>Login to the portal for details.</p>"
+            + "<br><small>Vidya Mandir School Portal</small>";
+    }
+
+    private String buildTaskBody(String title, String by) {
+        return "<h2>New Task Assigned</h2>"
+            + "<p>Task: <b>" + title + "</b></p>"
+            + "<p>Assigned by: <b>" + by + "</b></p>"
+            + "<p>Login to the portal to view details.</p>"
+            + "<br><small>Vidya Mandir School Portal</small>";
     }
 }
