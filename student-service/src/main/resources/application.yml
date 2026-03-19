@@ -45,6 +45,16 @@ spring:
           batch_size: 20
           order_inserts: true
           order_updates: true
+  # ── Kafka Producer ─────────────────────────
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      retries: 3
+      acks: all
+      properties:
+        spring.json.add.type.headers: false
 
 # ── Eureka ────────────────────────────────────
 eureka:
@@ -89,3 +99,4 @@ logging:
     org.hibernate.SQL: WARN
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+

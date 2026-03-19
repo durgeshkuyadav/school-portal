@@ -15,11 +15,25 @@ spring:
   lifecycle:
     timeout-per-shutdown-phase: 20s
 
-  # ── Disable mail auto-config by default ────
-  autoconfigure:
-    exclude:
-      - org.springframework.boot.autoconfigure.mail.MailSenderAutoConfiguration
-      - org.springframework.boot.autoconfigure.mail.MailSenderValidatorAutoConfiguration
+  # ✅ Mail auto-config ENABLE kar diya
+  # autoconfigure exclude HATA DIYA
+
+  # ── Mail Config ──────────────────────────────
+  mail:
+    host: ${MAIL_HOST:smtp.gmail.com}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USER:kpmedicalshop0@gmail.com}
+    password: ${MAIL_PASS:cwlj kapx jmwj cvdq}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
+        connectiontimeout: 5000
+        timeout: 3000
+        writetimeout: 5000
 
   # ── Kafka Consumer ────────────────────────
   kafka:
@@ -34,10 +48,6 @@ spring:
       properties:
         spring.json.trusted.packages: "*"
         spring.json.use.type.headers: false
-        isolation.level: read_committed
-    listener:
-      ack-mode: MANUAL_IMMEDIATE
-      concurrency: 3
 
 # ── Eureka ────────────────────────────────────
 eureka:
@@ -62,10 +72,11 @@ management:
       probes:
         enabled: true
 
-# ── Mail Toggle (default OFF) ─────────────────
+# ── App Config ────────────────────────────────
 app:
   mail:
     enabled: ${MAIL_ENABLED:false}
+    from: ${MAIL_USER:noreply@school.com}
 
 # ── Logging ───────────────────────────────────
 logging:
@@ -73,5 +84,8 @@ logging:
     root: INFO
     com.school.notification: DEBUG
     org.springframework.kafka: WARN
+    org.springframework.mail: DEBUG
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+```
+

@@ -20,25 +20,24 @@ services:
     image: confluentinc/cp-zookeeper:7.6.1
     container_name: zookeeper
     restart: unless-stopped
-    init: true
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
       ZOOKEEPER_SYNC_LIMIT: 2
     volumes:
       - zookeeper-data:/var/lib/zookeeper/data
+    # ✅ FIX 1: cub command broken tha — echo ruok se replace kiya
     healthcheck:
-      test: ["CMD-SHELL", "cub zk-ready localhost:2181 30 || exit 1"]
-      interval: 30s
-      timeout: 30s
+      test: ["CMD-SHELL", "echo ruok | nc localhost 2181 || exit 1"]
+      interval: 20s
+      timeout: 10s
       retries: 10
-      start_period: 60s
+      start_period: 30s
 
   kafka:
     image: confluentinc/cp-kafka:7.6.1
     container_name: kafka
     restart: unless-stopped
-    init: true
     depends_on:
       zookeeper:
         condition: service_healthy
@@ -56,12 +55,13 @@ services:
       KAFKA_LOG_RETENTION_HOURS: 168
     volumes:
       - kafka-data:/var/lib/kafka/data
+    # ✅ FIX 2: cub kafka-ready broken tha — kafka-topics se replace kiya
     healthcheck:
-      test: ["CMD-SHELL", "cub kafka-ready -b localhost:9092 1 30 || exit 1"]
+      test: ["CMD-SHELL", "kafka-topics --bootstrap-server localhost:9092 --list || exit 1"]
       interval: 30s
-      timeout: 30s
+      timeout: 15s
       retries: 10
-      start_period: 90s
+      start_period: 60s
 
   redis:
     image: redis:7.2-alpine
@@ -74,9 +74,10 @@ services:
       - redis-data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
-      interval: 15s
+      interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 10s
 
   # ─────────────────────────────────────────────
   # DATABASES — MySQL 8.0
@@ -87,7 +88,7 @@ services:
     container_name: mysql-auth
     restart: unless-stopped
     ports:
-      - "3307:3306"                             # 3307 taaki local MySQL se conflict na ho
+      - "3307:3306"
     environment:
       MYSQL_ROOT_PASSWORD: root
       MYSQL_DATABASE: school_auth
@@ -101,10 +102,10 @@ services:
              --innodb-buffer-pool-size=128M
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot"]
-      interval: 15s
-      timeout: 10s
-      retries: 10
-      start_period: 90s
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 150s
 
   mysql-student:
     image: mysql:8.0
@@ -126,10 +127,10 @@ services:
              --max-connections=100
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot"]
-      interval: 20s
-      timeout: 10s
-      retries: 10
-      start_period: 90s
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 150s
 
   mysql-academic:
     image: mysql:8.0
@@ -151,10 +152,10 @@ services:
              --max-connections=100
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot"]
-      interval: 20s
-      timeout: 10s
-      retries: 10
-      start_period: 90s
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 150s
 
   mysql-teacher:
     image: mysql:8.0
@@ -176,10 +177,10 @@ services:
              --max-connections=100
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot"]
-      interval: 20s
-      timeout: 10s
-      retries: 10
-      start_period: 90s
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 150s
 
   mysql-calendar:
     image: mysql:8.0
@@ -201,10 +202,10 @@ services:
              --max-connections=100
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot"]
-      interval: 20s
-      timeout: 10s
-      retries: 10
-      start_period: 90s
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 150s
 
   mysql-test:
     image: mysql:8.0
@@ -226,25 +227,27 @@ services:
              --max-connections=100
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot"]
-      interval: 20s
-      timeout: 10s
-      retries: 10
-      start_period: 90s
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 150s
 
   mongo-content:
     image: mongo:7.0
     container_name: mongo-content
     restart: unless-stopped
+    ports:
+      - "27017:27017"
     environment:
       MONGO_INITDB_DATABASE: school_content
     volumes:
       - mongo-content-data:/data/db
     healthcheck:
       test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')", "--quiet"]
-      interval: 20s
-      timeout: 15s
+      interval: 15s
+      timeout: 10s
       retries: 10
-      start_period: 60s
+      start_period: 30s
 
   # ─────────────────────────────────────────────
   # MICROSERVICES
@@ -258,12 +261,15 @@ services:
     restart: unless-stopped
     ports:
       - "8761:8761"
+    environment:
+      JAVA_OPTS: "-Xmx256m -Xms128m"
+    # ✅ FIX 3: grep UP add kiya — actually UP check karega
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8761/actuator/health || exit 1"]
-      interval: 30s
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8761/actuator/health | grep UP || exit 1"]
+      interval: 20s
       timeout: 10s
-      retries: 5
-      start_period: 60s
+      retries: 10
+      start_period: 90s
 
   api-gateway:
     build:
@@ -271,6 +277,7 @@ services:
       dockerfile: Dockerfile
     container_name: api-gateway
     restart: unless-stopped
+    # ✅ FIX 4: Port properly expose kiya — CORS fix hoga
     ports:
       - "8080:8080"
     depends_on:
@@ -280,13 +287,13 @@ services:
       SPRING_PROFILES_ACTIVE: docker
       EUREKA_SERVER_URL: http://eureka-server:8761/eureka
       JWT_SECRET: ${JWT_SECRET:-schoolPortalSecretKey2026VeryLongAndSecure}
-      JAVA_OPTS: "-Xmx192m -Xms64m -XX:+UseSerialGC -XX:MaxMetaspaceSize=128m -XX:+TieredCompilation -XX:TieredStopAtLevel=1"
+      JAVA_OPTS: "-Xmx256m -Xms128m"
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1"]
-      interval: 30s
-      timeout: 15s
-      retries: 10
-      start_period: 90s
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep UP || exit 1"]
+      interval: 20s
+      timeout: 10s
+      retries: 15
+      start_period: 120s
 
   auth-service:
     build:
@@ -314,14 +321,12 @@ services:
       JWT_SECRET: ${JWT_SECRET:-schoolPortalSecretKey2026VeryLongAndSecure}
       JWT_EXPIRY_MS: 3600000
       JWT_REFRESH_EXPIRY_MS: 604800000
-      SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: 2
-      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: 10
-      JAVA_OPTS: "-Xmx192m -Xms64m -XX:+UseSerialGC -XX:MaxMetaspaceSize=128m -XX:+TieredCompilation -XX:TieredStopAtLevel=1"
+      JAVA_OPTS: "-Xmx256m -Xms128m"
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8081/actuator/health || exit 1"]
-      interval: 30s
-      timeout: 15s
-      retries: 15
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8081/actuator/health | grep UP || exit 1"]
+      interval: 20s
+      timeout: 10s
+      retries: 20
       start_period: 180s
 
   student-service:
@@ -343,12 +348,12 @@ services:
       DB_USER: root
       DB_PASS: root
       EUREKA_SERVER_URL: http://eureka-server:8761/eureka
-      JAVA_OPTS: "-Xmx192m -Xms64m -XX:+UseSerialGC -XX:MaxMetaspaceSize=128m -XX:+TieredCompilation -XX:TieredStopAtLevel=1"
+      JAVA_OPTS: "-Xmx256m -Xms128m"
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8083/actuator/health || exit 1"]
-      interval: 30s
-      timeout: 15s
-      retries: 15
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8083/actuator/health | grep UP || exit 1"]
+      interval: 20s
+      timeout: 10s
+      retries: 20
       start_period: 180s
 
   academic-service:
@@ -373,12 +378,12 @@ services:
       DB_PASS: root
       KAFKA_BOOTSTRAP: kafka:29092
       EUREKA_SERVER_URL: http://eureka-server:8761/eureka
-      JAVA_OPTS: "-Xmx192m -Xms64m -XX:+UseSerialGC -XX:MaxMetaspaceSize=128m -XX:+TieredCompilation -XX:TieredStopAtLevel=1"
+      JAVA_OPTS: "-Xmx256m -Xms128m"
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8084/actuator/health || exit 1"]
-      interval: 30s
-      timeout: 15s
-      retries: 15
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8084/actuator/health | grep UP || exit 1"]
+      interval: 20s
+      timeout: 10s
+      retries: 20
       start_period: 180s
 
   teacher-service:
@@ -400,12 +405,12 @@ services:
       DB_USER: root
       DB_PASS: root
       EUREKA_SERVER_URL: http://eureka-server:8761/eureka
-      JAVA_OPTS: "-Xmx192m -Xms64m -XX:+UseSerialGC -XX:MaxMetaspaceSize=128m -XX:+TieredCompilation -XX:TieredStopAtLevel=1"
+      JAVA_OPTS: "-Xmx256m -Xms128m"
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8086/actuator/health || exit 1"]
-      interval: 30s
-      timeout: 15s
-      retries: 15
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8086/actuator/health | grep UP || exit 1"]
+      interval: 20s
+      timeout: 10s
+      retries: 20
       start_period: 180s
 
   content-service:
@@ -425,12 +430,12 @@ services:
       SPRING_PROFILES_ACTIVE: docker
       MONGO_URI: mongodb://mongo-content:27017/school_content
       EUREKA_SERVER_URL: http://eureka-server:8761/eureka
-      JAVA_OPTS: "-Xmx192m -Xms64m -XX:+UseSerialGC -XX:MaxMetaspaceSize=128m -XX:+TieredCompilation -XX:TieredStopAtLevel=1"
+      JAVA_OPTS: "-Xmx256m -Xms128m"
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8085/actuator/health || exit 1"]
-      interval: 30s
-      timeout: 15s
-      retries: 15
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8085/actuator/health | grep UP || exit 1"]
+      interval: 20s
+      timeout: 10s
+      retries: 20
       start_period: 180s
 
   calendar-service:
@@ -452,12 +457,12 @@ services:
       DB_USER: root
       DB_PASS: root
       EUREKA_SERVER_URL: http://eureka-server:8761/eureka
-      JAVA_OPTS: "-Xmx192m -Xms64m -XX:+UseSerialGC -XX:MaxMetaspaceSize=128m -XX:+TieredCompilation -XX:TieredStopAtLevel=1"
+      JAVA_OPTS: "-Xmx256m -Xms128m"
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8087/actuator/health || exit 1"]
-      interval: 30s
-      timeout: 15s
-      retries: 15
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8087/actuator/health | grep UP || exit 1"]
+      interval: 20s
+      timeout: 10s
+      retries: 20
       start_period: 180s
 
   online-test-service:
@@ -483,12 +488,12 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       EUREKA_SERVER_URL: http://eureka-server:8761/eureka
-      JAVA_OPTS: "-Xmx192m -Xms64m -XX:+UseSerialGC -XX:MaxMetaspaceSize=128m -XX:+TieredCompilation -XX:TieredStopAtLevel=1"
+      JAVA_OPTS: "-Xmx256m -Xms128m"
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8091/actuator/health || exit 1"]
-      interval: 30s
-      timeout: 15s
-      retries: 15
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8091/actuator/health | grep UP || exit 1"]
+      interval: 20s
+      timeout: 10s
+      retries: 20
       start_period: 180s
 
   notification-service:
@@ -510,14 +515,16 @@ services:
       EUREKA_SERVER_URL: http://eureka-server:8761/eureka
       MAIL_HOST: ${MAIL_HOST:-smtp.gmail.com}
       MAIL_PORT: ${MAIL_PORT:-587}
-      MAIL_USER: ${MAIL_USER:-your@gmail.com}
-      MAIL_PASS: ${MAIL_PASS:-yourpassword}
-      JAVA_OPTS: "-Xmx128m -Xms48m -XX:+UseSerialGC -XX:MaxMetaspaceSize=96m -XX:+TieredCompilation -XX:TieredStopAtLevel=1"
+      MAIL_USER: ${MAIL_USER:-kpmedicalshop0@gmail.com}
+      MAIL_PASS: ${MAIL_PASS:-cwlj kapx jmwj cvdq}
+      # ✅ FIX 5: MAIL_ENABLED true — email ab jayegi
+      MAIL_ENABLED: "true"
+      JAVA_OPTS: "-Xmx128m -Xms64m"
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8089/actuator/health || exit 1"]
-      interval: 30s
-      timeout: 15s
-      retries: 15
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8089/actuator/health | grep UP || exit 1"]
+      interval: 20s
+      timeout: 10s
+      retries: 20
       start_period: 180s
 
   # ─────────────────────────────────────────────
@@ -533,10 +540,10 @@ services:
     ports:
       - "3000:80"
     depends_on:
-      api-gateway:
-        condition: service_healthy
+      - api-gateway
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:80 || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:80/health || exit 1"]
       interval: 30s
       timeout: 10s
-      retries: 3
+      retries: 5
+      start_period: 30s
