@@ -51,6 +51,8 @@ public class JwtAuthFilter extends AbstractGatewayFilterFactory<JwtAuthFilter.Co
                 ServerHttpRequest mutatedRequest = exchange.getRequest().mutate()
                     .header("X-User-Id", claims.getSubject())
                     .header("X-User-Role", claims.get("role", String.class))
+                    .header("X-User-Name",   claims.get("username", String.class) != null
+                        ? claims.get("username", String.class) : "")
                     .header("X-Class-Id", claims.get("classId", String.class) != null
                         ? claims.get("classId", String.class) : "")
                     .header("X-Subject-Ids", claims.get("subjectIds", String.class) != null
