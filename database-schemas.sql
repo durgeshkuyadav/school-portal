@@ -1,66 +1,57 @@
 -- ═══════════════════════════════════════════════════════════════════
--- SCHOOL PORTAL — DATABASE SCHEMAS
--- Applies to each respective PostgreSQL database
+-- SCHOOL PORTAL — DATABASE SCHEMAS (MySQL 8.0)
+-- ✅ FIX: Was PostgreSQL syntax (BIGSERIAL). All services use MySQL 8.0.
+-- NOTE: Since all services use spring.jpa.hibernate.ddl-auto=update,
+--       Hibernate creates the tables automatically. This file is for
+--       reference / manual setup only.
 -- ═══════════════════════════════════════════════════════════════════
 
 -- ─────────────────────────────────────────────
 -- school_auth database
 -- ─────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS users (
-    id BIGSERIAL PRIMARY KEY,
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
     username VARCHAR(50) UNIQUE NOT NULL,
     email VARCHAR(100) UNIQUE NOT NULL,
     password VARCHAR(255) NOT NULL,
-    role VARCHAR(30) NOT NULL CHECK (role IN (
-        'SUPER_ADMIN','SCHOOL_ADMIN','CLASS_TEACHER','SUBJECT_TEACHER','STUDENT','PARENT'
-    )),
+    role VARCHAR(30) NOT NULL,
     profile_id BIGINT,
     class_id BIGINT,
     subject_ids TEXT,
     school_id VARCHAR(50),
     enabled BOOLEAN NOT NULL DEFAULT TRUE,
     account_non_locked BOOLEAN NOT NULL DEFAULT TRUE,
-    created_at TIMESTAMP DEFAULT NOW(),
-    updated_at TIMESTAMP DEFAULT NOW()
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS refresh_tokens (
-    id BIGSERIAL PRIMARY KEY,
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
     token VARCHAR(512) UNIQUE NOT NULL,
-    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    expiry_date TIMESTAMP NOT NULL
+    user_id BIGINT NOT NULL,
+    expiry_date DATETIME NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
-
-CREATE INDEX idx_users_username ON users(username);
-CREATE INDEX idx_users_email ON users(email);
-CREATE INDEX idx_users_role ON users(role);
 
 -- ─────────────────────────────────────────────
 -- school_student database
 -- ─────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS school_classes (
-    id BIGSERIAL PRIMARY KEY,
-    name VARCHAR(30) NOT NULL,          -- PLAY_GROUP, NURSERY, KG, CLASS_1..CLASS_5
-    section VARCHAR(5),                  -- A, B, C
-    academic_year VARCHAR(10) NOT NULL,  -- 2025-2026
-    class_teacher_id BIGINT,             -- References auth.users.id
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(30) NOT NULL,
+    section VARCHAR(5),
+    academic_year VARCHAR(10) NOT NULL,
+    class_teacher_id BIGINT,
     capacity INT NOT NULL DEFAULT 40
 );
 
-CREATE TABLE IF NOT EXISTS subjects (
-    id BIGSERIAL PRIMARY KEY,
-    name VARCHAR(100) NOT NULL,
-    class_id BIGINT NOT NULL REFERENCES school_classes(id),
-    teacher_id BIGINT                    -- References auth.users.id
-);
-
 CREATE TABLE IF NOT EXISTS students (
-    id BIGSERIAL PRIMARY KEY,
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
     first_name VARCHAR(50) NOT NULL,
     last_name VARCHAR(50) NOT NULL,
     admission_number VARCHAR(30) UNIQUE NOT NULL,
     date_of_birth DATE,
-    gender VARCHAR(10) CHECK (gender IN ('MALE','FEMALE','OTHER')),
+    gender VARCHAR(10),
     photo_url TEXT,
     address TEXT,
     blood_group VARCHAR(5),
@@ -68,40 +59,44 @@ CREATE TABLE IF NOT EXISTS students (
     guardian_relation VARCHAR(50),
     guardian_phone VARCHAR(20),
     guardian_email VARCHAR(100),
-    class_id BIGINT NOT NULL REFERENCES school_classes(id),
+    class_id BIGINT NOT NULL,
     roll_number INT NOT NULL,
     academic_year VARCHAR(10) NOT NULL,
-    status VARCHAR(20) DEFAULT 'ACTIVE' CHECK (status IN (
-        'ACTIVE','INACTIVE','PROMOTED','TRANSFERRED','WITHDRAWN'
-    )),
-    created_at TIMESTAMP DEFAULT NOW(),
-    updated_at TIMESTAMP DEFAULT NOW(),
-    UNIQUE (class_id, roll_number, academic_year)
+    status VARCHAR(20) DEFAULT 'ACTIVE',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_class_roll_year (class_id, roll_number, academic_year),
+    FOREIGN KEY (class_id) REFERENCES school_classes(id)
 );
 
-CREATE TABLE IF NOT EXISTS attendance (
-    id BIGSERIAL PRIMARY KEY,
-    student_id BIGINT NOT NULL REFERENCES students(id),
-    attendance_date DATE NOT NULL,
-    status VARCHAR(10) CHECK (status IN ('PRESENT','ABSENT','LATE','EXCUSED')),
-    marked_by BIGINT,
-    UNIQUE (student_id, attendance_date)
+CREATE TABLE IF NOT EXISTS tasks (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    title VARCHAR(255) NOT NULL,
+    description TEXT,
+    assigned_by_user_id BIGINT,
+    assigned_by_name VARCHAR(100),
+    assigned_by_role VARCHAR(50),
+    assigned_to_user_id BIGINT,
+    assigned_to_name VARCHAR(100),
+    assigned_to_role VARCHAR(50),
+    priority VARCHAR(20) DEFAULT 'MEDIUM',
+    status VARCHAR(20) DEFAULT 'PENDING',
+    category VARCHAR(50) DEFAULT 'ADMINISTRATIVE',
+    due_date DATE,
+    completed_at DATETIME,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    completion_note TEXT,
+    admin_remark TEXT
 );
-
-CREATE INDEX idx_students_class ON students(class_id);
-CREATE INDEX idx_students_status ON students(status);
-CREATE INDEX idx_attendance_student ON attendance(student_id);
-CREATE INDEX idx_attendance_date ON attendance(attendance_date);
 
 -- ─────────────────────────────────────────────
 -- school_academic database
 -- ─────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS exams (
-    id BIGSERIAL PRIMARY KEY,
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
-    exam_type VARCHAR(30) NOT NULL CHECK (exam_type IN (
-        'UNIT_TEST','MID_TERM','FINAL','QUARTERLY','HALF_YEARLY','ANNUAL','ONLINE_TEST'
-    )),
+    exam_type VARCHAR(30) NOT NULL,
     class_id BIGINT NOT NULL,
     subject_id BIGINT NOT NULL,
     subject_name VARCHAR(100),
@@ -109,149 +104,106 @@ CREATE TABLE IF NOT EXISTS exams (
     total_marks INT NOT NULL,
     passing_marks INT NOT NULL,
     exam_date DATE NOT NULL,
+    -- ✅ academic_year stored as '2025-2026' format — must match frontend
     academic_year VARCHAR(10) NOT NULL,
     created_by_teacher_id BIGINT,
-    results_published BOOLEAN DEFAULT FALSE,
-    created_at TIMESTAMP DEFAULT NOW()
+    results_published TINYINT(1) DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS results (
-    id BIGSERIAL PRIMARY KEY,
-    exam_id BIGINT NOT NULL REFERENCES exams(id) ON DELETE CASCADE,
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    exam_id BIGINT NOT NULL,
     student_id BIGINT NOT NULL,
     student_name VARCHAR(100),
     marks_obtained INT NOT NULL,
     grade VARCHAR(3),
-    status VARCHAR(15) CHECK (status IN ('PASS','FAIL','ABSENT','EXEMPTED')),
-    exam_cleared BOOLEAN,
+    status VARCHAR(15),
+    exam_cleared TINYINT(1),
     remarks TEXT,
     updated_by_teacher_id BIGINT,
-    updated_at TIMESTAMP DEFAULT NOW(),
-    UNIQUE (exam_id, student_id)
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_exam_student (exam_id, student_id),
+    FOREIGN KEY (exam_id) REFERENCES exams(id) ON DELETE CASCADE
 );
-
-CREATE INDEX idx_results_student ON results(student_id);
-CREATE INDEX idx_results_exam ON results(exam_id);
-CREATE INDEX idx_exams_class ON exams(class_id);
 
 -- ─────────────────────────────────────────────
 -- school_teacher database
 -- ─────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS teachers (
-    id BIGSERIAL PRIMARY KEY,
-    user_id BIGINT UNIQUE NOT NULL,   -- References auth.users.id
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT UNIQUE,
     first_name VARCHAR(50) NOT NULL,
     last_name VARCHAR(50) NOT NULL,
-    employee_code VARCHAR(30) UNIQUE,
-    designation VARCHAR(100),
-    department VARCHAR(100),
-    photo_url TEXT,
-    phone VARCHAR(20),
     email VARCHAR(100),
+    phone VARCHAR(20),
+    designation VARCHAR(100),
+    qualification VARCHAR(200),
+    subjects_taught TEXT,
+    profile_photo_url TEXT,
     joining_date DATE,
-    is_active BOOLEAN DEFAULT TRUE,
-    created_at TIMESTAMP DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS teacher_qualifications (
-    id BIGSERIAL PRIMARY KEY,
-    teacher_id BIGINT NOT NULL REFERENCES teachers(id) ON DELETE CASCADE,
-    degree_name VARCHAR(100) NOT NULL,     -- B.Ed, M.Sc, Ph.D
-    institution VARCHAR(200) NOT NULL,
-    year_of_passing INT,
-    specialization VARCHAR(100),
-    grade_percentage DECIMAL(5,2)
-);
-
-CREATE TABLE IF NOT EXISTS teacher_skills (
-    id BIGSERIAL PRIMARY KEY,
-    teacher_id BIGINT NOT NULL REFERENCES teachers(id) ON DELETE CASCADE,
-    skill_name VARCHAR(100) NOT NULL,
-    proficiency_level VARCHAR(20) CHECK (proficiency_level IN ('BEGINNER','INTERMEDIATE','EXPERT'))
-);
-
-CREATE TABLE IF NOT EXISTS teacher_achievements (
-    id BIGSERIAL PRIMARY KEY,
-    teacher_id BIGINT NOT NULL REFERENCES teachers(id) ON DELETE CASCADE,
-    title VARCHAR(200) NOT NULL,
-    description TEXT,
-    achievement_date DATE,
-    category VARCHAR(50) CHECK (category IN ('AWARD','PUBLICATION','TRAINING','CERTIFICATION','OTHER'))
+    is_active TINYINT(1) DEFAULT 1,
+    show_in_directory TINYINT(1) DEFAULT 1,
+    bio TEXT
 );
 
 -- ─────────────────────────────────────────────
 -- school_calendar database
 -- ─────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS calendar_events (
-    id BIGSERIAL PRIMARY KEY,
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
     title VARCHAR(200) NOT NULL,
     description TEXT,
-    event_type VARCHAR(50) CHECK (event_type IN (
-        'HOLIDAY','EXAM','SPORTS','CULTURAL','MEETING','PTM','TRIP','OTHER'
-    )),
-    start_date TIMESTAMP NOT NULL,
-    end_date TIMESTAMP,
-    all_day BOOLEAN DEFAULT TRUE,
-    class_id BIGINT,    -- NULL means school-wide event
-    color VARCHAR(20),  -- for calendar display
-    created_by BIGINT,
-    created_at TIMESTAMP DEFAULT NOW()
+    -- ✅ FIX: CalendarEvent entity uses eventDate (LocalDate), was start_date TIMESTAMP in old schema
+    event_date DATE NOT NULL,
+    event_type VARCHAR(50),
+    is_holiday TINYINT(1) DEFAULT 0,
+    is_public TINYINT(1) DEFAULT 1,
+    created_by_user_id BIGINT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
-
-CREATE INDEX idx_events_date ON calendar_events(start_date);
-CREATE INDEX idx_events_class ON calendar_events(class_id);
 
 -- ─────────────────────────────────────────────
 -- school_test database (Online Tests)
 -- ─────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS online_tests (
-    id BIGSERIAL PRIMARY KEY,
+CREATE TABLE IF NOT EXISTS tests (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
     title VARCHAR(200) NOT NULL,
     subject_name VARCHAR(100),
-    class_id BIGINT NOT NULL,
+    class_id BIGINT,
     subject_id BIGINT,
-    total_marks INT NOT NULL,
-    duration_minutes INT NOT NULL,
-    start_time TIMESTAMP,
-    end_time TIMESTAMP,
-    shuffle_questions BOOLEAN DEFAULT TRUE,
-    max_attempts INT DEFAULT 1,
-    created_by BIGINT,
-    is_active BOOLEAN DEFAULT TRUE,
-    created_at TIMESTAMP DEFAULT NOW()
+    created_by_user_id BIGINT,
+    duration_minutes INT,
+    total_marks INT,
+    passing_marks INT,
+    is_active TINYINT(1) DEFAULT 1,
+    starts_at DATETIME,
+    ends_at DATETIME,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE IF NOT EXISTS test_questions (
-    id BIGSERIAL PRIMARY KEY,
-    test_id BIGINT NOT NULL REFERENCES online_tests(id) ON DELETE CASCADE,
+CREATE TABLE IF NOT EXISTS questions (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    test_id BIGINT NOT NULL,
     question_text TEXT NOT NULL,
-    question_type VARCHAR(20) CHECK (question_type IN ('MCQ','TRUE_FALSE','SHORT_ANSWER')),
-    option_a TEXT,
-    option_b TEXT,
-    option_c TEXT,
-    option_d TEXT,
-    correct_answer VARCHAR(200),
-    marks INT NOT NULL DEFAULT 1,
-    order_num INT
+    option_a TEXT, option_b TEXT, option_c TEXT, option_d TEXT,
+    correct_option VARCHAR(10) NOT NULL,
+    marks INT DEFAULT 1,
+    order_index INT,
+    FOREIGN KEY (test_id) REFERENCES tests(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS test_attempts (
-    id BIGSERIAL PRIMARY KEY,
-    test_id BIGINT NOT NULL REFERENCES online_tests(id),
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    test_id BIGINT NOT NULL,
+    test_title VARCHAR(200),
     student_id BIGINT NOT NULL,
-    started_at TIMESTAMP DEFAULT NOW(),
-    submitted_at TIMESTAMP,
     score INT,
+    total_marks INT,
     percentage DECIMAL(5,2),
-    status VARCHAR(20) DEFAULT 'IN_PROGRESS' CHECK (status IN ('IN_PROGRESS','SUBMITTED','TIMED_OUT')),
-    UNIQUE (test_id, student_id)
-);
-
-CREATE TABLE IF NOT EXISTS attempt_answers (
-    id BIGSERIAL PRIMARY KEY,
-    attempt_id BIGINT NOT NULL REFERENCES test_attempts(id) ON DELETE CASCADE,
-    question_id BIGINT NOT NULL REFERENCES test_questions(id),
-    student_answer TEXT,
-    is_correct BOOLEAN,
-    marks_awarded INT DEFAULT 0
+    passed TINYINT(1),
+    status VARCHAR(20) DEFAULT 'STARTED',
+    started_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    submitted_at DATETIME,
+    FOREIGN KEY (test_id) REFERENCES tests(id)
 );

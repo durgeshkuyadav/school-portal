@@ -66,25 +66,26 @@ public class StudentService {
     @Transactional
     public StudentResponse updateStudent(Long id, UpdateStudentRequest req) {
         Student student = findStudentById(id);
-  if (req.getEmail() != null)
-        student.setGuardianEmail(req.getEmail());
-    if (req.getPhone() != null)
-        student.setGuardianPhone(req.getPhone());
-    if (req.getGuardianName() != null)
-        student.setGuardianName(req.getGuardianName());
-    if (req.getGender() != null)
-        student.setGender(req.getGender());
-    if (req.getBloodGroup() != null)
-        student.setBloodGroup(req.getBloodGroup());
-    if (req.getDob() != null) {
-        try {
-            student.setDateOfBirth(
-                java.time.LocalDate.parse(req.getDob()));
-        } catch (Exception ignored) {}
-    }
 
-    return mapToResponse(studentRepository.save(student));
-}
+        // ✅ FIX: All fields from UpdateStudentRequest are now applied.
+        // Previously firstName, lastName, address, photoUrl were silently dropped.
+        if (req.getFirstName() != null)    student.setFirstName(req.getFirstName());
+        if (req.getLastName() != null)     student.setLastName(req.getLastName());
+        if (req.getAddress() != null)      student.setAddress(req.getAddress());
+        if (req.getPhotoUrl() != null)     student.setPhotoUrl(req.getPhotoUrl());
+        if (req.getGuardianName() != null) student.setGuardianName(req.getGuardianName());
+        if (req.getEmail() != null)        student.setGuardianEmail(req.getEmail());
+        if (req.getPhone() != null)        student.setGuardianPhone(req.getPhone());
+        if (req.getGender() != null)       student.setGender(req.getGender());
+        if (req.getBloodGroup() != null)   student.setBloodGroup(req.getBloodGroup());
+        if (req.getDob() != null) {
+            try {
+                student.setDateOfBirth(java.time.LocalDate.parse(req.getDob()));
+            } catch (Exception ignored) {}
+        }
+
+        return mapToResponse(studentRepository.save(student));
+    }
 
     @Transactional
     public void promoteStudent(Long studentId, Long newClassId) {

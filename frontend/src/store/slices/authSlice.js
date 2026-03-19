@@ -19,7 +19,6 @@ export const logout = createAsyncThunk('auth/logout', async (_, { getState }) =>
   localStorage.clear();
 });
 
-// restoreSession as a thunk so it can be dispatched in useEffect
 export const restoreSession = createAsyncThunk('auth/restoreSession', async (_, { dispatch }) => {
   const token = localStorage.getItem('accessToken');
   if (!token) return null;
@@ -30,7 +29,10 @@ export const restoreSession = createAsyncThunk('auth/restoreSession', async (_, 
         accessToken: token,
         refreshToken: localStorage.getItem('refreshToken'),
         user: {
-          userId: decoded.sub,
+          // ✅ FIX: decoded.sub is a string (JWT standard). Convert to Number so
+          //         it matches the type from login.fulfilled (payload.userId = Long).
+          //         Prevents subtle === comparison failures after page refresh.
+          userId: Number(decoded.sub),
           username: decoded.username || decoded.email?.split('@')[0],
           email: decoded.email,
           role: decoded.role,
@@ -54,7 +56,7 @@ const authSlice = createSlice({
     user: null,
     accessToken: localStorage.getItem('accessToken') || null,
     refreshToken: localStorage.getItem('refreshToken') || null,
-    isAuthenticated: false,  // will be set by restoreSession
+    isAuthenticated: false,
     loading: false,
     error: null,
   },
@@ -63,7 +65,6 @@ const authSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
-      // ── login ─────────────────────────────────────
       .addCase(login.pending, (state) => {
         state.loading = true;
         state.error = null;
@@ -74,7 +75,7 @@ const authSlice = createSlice({
         state.refreshToken = payload.refreshToken;
         state.isAuthenticated = true;
         state.user = {
-          userId: payload.userId,
+          userId: payload.userId,       // already a number from server response
           username: payload.username,
           email: payload.email,
           role: payload.role,
@@ -88,7 +89,6 @@ const authSlice = createSlice({
         state.error = payload;
         state.isAuthenticated = false;
       })
-      // ── logout ────────────────────────────────────
       .addCase(logout.fulfilled, (state) => {
         state.user = null;
         state.accessToken = null;
@@ -96,7 +96,6 @@ const authSlice = createSlice({
         state.isAuthenticated = false;
         state.error = null;
       })
-      // ── restoreSession ────────────────────────────
       .addCase(restoreSession.fulfilled, (state, { payload }) => {
         if (payload) {
           state.accessToken = payload.accessToken;
@@ -111,7 +110,6 @@ const authSlice = createSlice({
 export const { clearError } = authSlice.actions;
 export default authSlice.reducer;
 
-// Selectors
 export const selectUser = (state) => state.auth.user;
 export const selectRole = (state) => state.auth.user?.role;
 export const selectIsAuthenticated = (state) => state.auth.isAuthenticated;

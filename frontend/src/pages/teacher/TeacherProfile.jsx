@@ -13,7 +13,6 @@ import EmailIcon from '@mui/icons-material/Email';
 import PhoneIcon from '@mui/icons-material/Phone';
 import SchoolIcon from '@mui/icons-material/School';
 import WorkIcon from '@mui/icons-material/Work';
-import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
 import CloseIcon from '@mui/icons-material/Close';
 import SaveIcon from '@mui/icons-material/Save';
 import apiClient from '../../api/apiClient';
@@ -21,16 +20,13 @@ import { useAppSettings } from '../../context/AppSettingsContext';
 import { useSelector } from 'react-redux';
 import { selectUser } from '../../store/slices/authSlice';
 
-/* ═══════════════════════════════════════════════════════════════════
-   TEACHER PROFILE — View & Edit
-   Access: Admin (all), Teacher (own profile)
-   ═══════════════════════════════════════════════════════════════════ */
-
+// ✅ FIX: profilePhotoUrl (not photoUrl) to match TeacherService.updateTeacher
+//         which does: req.get("profilePhotoUrl")
 const EMPTY_FORM = {
   firstName: '', lastName: '', email: '', phone: '',
   designation: '', qualification: '', subjectsTaught: '',
   bio: '', joiningDate: '', experienceYears: '', address: '',
-  gender: 'MALE', dob: '', photoUrl: '', userId: ''
+  gender: 'MALE', dob: '', profilePhotoUrl: '', userId: ''   // ← was photoUrl
 };
 
 function InfoRow({ icon, label, value, isDark }) {
@@ -73,8 +69,7 @@ function PhotoUpload({ photoUrl, onPhotoChange, t, isDark }) {
             width: 100, height: 100,
             border: '3px solid #1565C0',
             boxShadow: '0 4px 16px rgba(21,101,192,0.25)',
-            bgcolor: '#1565C0',
-            fontSize: 36,
+            bgcolor: '#1565C0', fontSize: 36,
           }}
         >
           {!photoUrl && <PersonIcon sx={{ fontSize: 48 }} />}
@@ -147,7 +142,9 @@ export default function TeacherProfile({ standalone = false }) {
       experienceYears: teacher.experienceYears || '',
       address: teacher.address || '', gender: teacher.gender || 'MALE',
       dob: teacher.dob?.substring(0, 10) || '',
-      photoUrl: teacher.photoUrl || '', userId: teacher.userId || ''
+      // ✅ FIX: read from teacher.profilePhotoUrl (not teacher.photoUrl)
+      profilePhotoUrl: teacher.profilePhotoUrl || '',
+      userId: teacher.userId || ''
     });
     setError(''); setSuccess('');
   };
@@ -159,6 +156,7 @@ export default function TeacherProfile({ standalone = false }) {
     }
     setSaving(true); setError('');
     try {
+      // form already has profilePhotoUrl key — TeacherService.updateTeacher checks req.get("profilePhotoUrl") ✓
       if (editTeacher === 'new') await apiClient.post('/teachers', form);
       else await apiClient.put(`/teachers/${editTeacher.id}`, form);
       setSuccess(t.success + '!');
@@ -175,12 +173,9 @@ export default function TeacherProfile({ standalone = false }) {
 
   return (
     <Box sx={{ bgcolor: bg, minHeight: '100vh', p: standalone ? 3 : 0 }}>
-      {/* Header */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Box>
-          <Typography variant="h5" fontWeight={800} color={text}>
-            👨‍🏫 {t.teacherDetails}
-          </Typography>
+          <Typography variant="h5" fontWeight={800} color={text}>👨‍🏫 {t.teacherDetails}</Typography>
           <Typography fontSize={13} color={sub}>{filtered.length} {t.teachers}</Typography>
         </Box>
         <Box sx={{ display: 'flex', gap: 1 }}>
@@ -207,38 +202,26 @@ export default function TeacherProfile({ standalone = false }) {
           {filtered.map((teacher) => (
             <Grid item xs={12} sm={6} md={4} key={teacher.id}>
               <Card sx={{
-                bgcolor: card, border: `1px solid ${border}`,
-                borderRadius: 3, overflow: 'hidden', cursor: 'pointer',
+                bgcolor: card, border: `1px solid ${border}`, borderRadius: 3, overflow: 'hidden',
                 transition: 'all .2s ease',
                 '&:hover': { transform: 'translateY(-3px)', boxShadow: isDark ? '0 8px 32px rgba(0,0,0,0.4)' : '0 8px 32px rgba(21,101,192,0.15)' },
               }}>
-                {/* Color bar */}
                 <Box sx={{ height: 5, background: 'linear-gradient(90deg, #1565C0, #6A1B9A)' }} />
                 <CardContent sx={{ p: 2.5 }}>
                   <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
-                    <Avatar
-                      src={teacher.photoUrl}
-                      sx={{ width: 60, height: 60, bgcolor: '#1565C0', border: `2px solid ${border}` }}
-                    >
-                      {!teacher.photoUrl && <PersonIcon />}
+                    {/* ✅ FIX: use teacher.profilePhotoUrl */}
+                    <Avatar src={teacher.profilePhotoUrl} sx={{ width: 60, height: 60, bgcolor: '#1565C0', border: `2px solid ${border}` }}>
+                      {!teacher.profilePhotoUrl && <PersonIcon />}
                     </Avatar>
                     <Box sx={{ flex: 1 }}>
-                      <Typography fontWeight={700} color={text} fontSize={15}>
-                        {teacher.firstName} {teacher.lastName}
-                      </Typography>
-                      <Chip
-                        label={teacher.designation || 'Teacher'}
-                        size="small"
-                        sx={{ mt: 0.5, bgcolor: isDark ? '#1e3a6e' : '#e3f2fd', color: '#1565C0', fontWeight: 600, fontSize: 11 }}
-                      />
+                      <Typography fontWeight={700} color={text} fontSize={15}>{teacher.firstName} {teacher.lastName}</Typography>
+                      <Chip label={teacher.designation || 'Teacher'} size="small"
+                        sx={{ mt: 0.5, bgcolor: isDark ? '#1e3a6e' : '#e3f2fd', color: '#1565C0', fontWeight: 600, fontSize: 11 }} />
                       {teacher.subjectsTaught && (
-                        <Typography fontSize={12} color={sub} mt={0.5}>
-                          📚 {teacher.subjectsTaught}
-                        </Typography>
+                        <Typography fontSize={12} color={sub} mt={0.5}>📚 {teacher.subjectsTaught}</Typography>
                       )}
                     </Box>
                   </Box>
-
                   {teacher.email && (
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1.5 }}>
                       <EmailIcon sx={{ fontSize: 14, color: sub }} />
@@ -251,21 +234,14 @@ export default function TeacherProfile({ standalone = false }) {
                       <Typography fontSize={12} color={sub}>{teacher.phone}</Typography>
                     </Box>
                   )}
-
                   <Box sx={{ display: 'flex', gap: 1, mt: 2 }}>
-                    <Button
-                      size="small" startIcon={<VisibilityIcon />}
-                      variant="outlined" onClick={() => openView(teacher)}
-                      sx={{ flex: 1, borderRadius: 2, borderColor: '#1565C0', color: '#1565C0', fontSize: 12 }}
-                    >
+                    <Button size="small" startIcon={<VisibilityIcon />} variant="outlined" onClick={() => openView(teacher)}
+                      sx={{ flex: 1, borderRadius: 2, borderColor: '#1565C0', color: '#1565C0', fontSize: 12 }}>
                       {t.viewProfile}
                     </Button>
                     {(isAdmin || user?.profileId === teacher.id) && (
-                      <Button
-                        size="small" startIcon={<EditIcon />}
-                        variant="contained" onClick={() => openEdit(teacher)}
-                        sx={{ flex: 1, borderRadius: 2, bgcolor: '#1565C0', fontSize: 12 }}
-                      >
+                      <Button size="small" startIcon={<EditIcon />} variant="contained" onClick={() => openEdit(teacher)}
+                        sx={{ flex: 1, borderRadius: 2, bgcolor: '#1565C0', fontSize: 12 }}>
                         {t.editProfile}
                       </Button>
                     )}
@@ -285,7 +261,7 @@ export default function TeacherProfile({ standalone = false }) {
         </Grid>
       )}
 
-      {/* ── VIEW Dialog ── */}
+      {/* VIEW Dialog */}
       <Dialog open={!!viewTeacher} onClose={() => setViewTeacher(null)} maxWidth="md" fullWidth
         PaperProps={{ sx: { bgcolor: card, borderRadius: 3, border: `1px solid ${border}` } }}>
         {viewTeacher && (
@@ -293,38 +269,31 @@ export default function TeacherProfile({ standalone = false }) {
             <Box sx={{ background: 'linear-gradient(135deg,#0B1F3A,#1565C0)', p: 3 }}>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-                  <Avatar src={viewTeacher.photoUrl}
+                  <Avatar src={viewTeacher.profilePhotoUrl}
                     sx={{ width: 80, height: 80, border: '3px solid rgba(255,255,255,0.3)', bgcolor: 'rgba(255,255,255,0.1)' }}>
-                    {!viewTeacher.photoUrl && <PersonIcon sx={{ fontSize: 40 }} />}
+                    {!viewTeacher.profilePhotoUrl && <PersonIcon sx={{ fontSize: 40 }} />}
                   </Avatar>
                   <Box>
-                    <Typography variant="h5" fontWeight={800} color="#fff">
-                      {viewTeacher.firstName} {viewTeacher.lastName}
-                    </Typography>
+                    <Typography variant="h5" fontWeight={800} color="#fff">{viewTeacher.firstName} {viewTeacher.lastName}</Typography>
                     <Chip label={viewTeacher.designation || 'Teacher'} size="small"
                       sx={{ bgcolor: 'rgba(255,255,255,0.15)', color: '#fff', mt: 0.5 }} />
                   </Box>
                 </Box>
-                <IconButton onClick={() => setViewTeacher(null)} sx={{ color: '#fff' }}>
-                  <CloseIcon />
-                </IconButton>
+                <IconButton onClick={() => setViewTeacher(null)} sx={{ color: '#fff' }}><CloseIcon /></IconButton>
               </Box>
             </Box>
-
             <Tabs value={tab} onChange={(_, v) => setTab(v)}
               sx={{ px: 2, borderBottom: `1px solid ${border}`, '& .MuiTab-root': { color: sub, fontWeight: 600 }, '& .Mui-selected': { color: '#1565C0' } }}>
               <Tab label={t.personalInfo} />
               <Tab label={t.academicInfo} />
               <Tab label={t.contactInfo} />
             </Tabs>
-
             <DialogContent sx={{ p: 3 }}>
               {tab === 0 && (
                 <Grid container spacing={2}>
                   <Grid item xs={12} sm={6}>
                     <InfoRow icon={<PersonIcon fontSize="small" />} label={t.name} value={`${viewTeacher.firstName} ${viewTeacher.lastName}`} isDark={isDark} />
                     <InfoRow icon={<WorkIcon fontSize="small" />} label={t.gender} value={viewTeacher.gender} isDark={isDark} />
-                    <InfoRow icon={<WorkIcon fontSize="small" />} label={t.dob} value={viewTeacher.dob?.substring(0, 10)} isDark={isDark} />
                     <InfoRow icon={<WorkIcon fontSize="small" />} label={t.joinDate} value={viewTeacher.joiningDate?.substring(0, 10)} isDark={isDark} />
                   </Grid>
                   <Grid item xs={12} sm={6}>
@@ -332,9 +301,7 @@ export default function TeacherProfile({ standalone = false }) {
                     {viewTeacher.bio && (
                       <Box sx={{ mt: 1 }}>
                         <Typography fontSize={11} color={sub} fontWeight={600} textTransform="uppercase" letterSpacing={0.5} mb={0.5}>{t.bio}</Typography>
-                        <Typography fontSize={13} color={text} sx={{ p: 1.5, bgcolor: isDark ? '#1e2a3e' : '#f8f9ff', borderRadius: 2 }}>
-                          {viewTeacher.bio}
-                        </Typography>
+                        <Typography fontSize={13} color={text} sx={{ p: 1.5, bgcolor: isDark ? '#1e2a3e' : '#f8f9ff', borderRadius: 2 }}>{viewTeacher.bio}</Typography>
                       </Box>
                     )}
                   </Grid>
@@ -367,7 +334,7 @@ export default function TeacherProfile({ standalone = false }) {
         )}
       </Dialog>
 
-      {/* ── EDIT / ADD Dialog ── */}
+      {/* EDIT / ADD Dialog */}
       <Dialog open={!!editTeacher} onClose={() => setEditTeacher(null)} maxWidth="md" fullWidth
         PaperProps={{ sx: { bgcolor: card, borderRadius: 3, border: `1px solid ${border}` } }}>
         <DialogTitle sx={{ background: 'linear-gradient(135deg,#0B1F3A,#1565C0)', color: '#fff', fontWeight: 800, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -380,11 +347,11 @@ export default function TeacherProfile({ standalone = false }) {
           {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
 
           <Grid container spacing={2}>
-            {/* Photo upload */}
             <Grid item xs={12} sx={{ display: 'flex', justifyContent: 'center' }}>
+              {/* ✅ FIX: form.profilePhotoUrl and onPhotoChange uses profilePhotoUrl key */}
               <PhotoUpload
-                photoUrl={form.photoUrl}
-                onPhotoChange={(url) => setForm(f => ({ ...f, photoUrl: url }))}
+                photoUrl={form.profilePhotoUrl}
+                onPhotoChange={(url) => setForm(f => ({ ...f, profilePhotoUrl: url }))}
                 t={t} isDark={isDark}
               />
             </Grid>

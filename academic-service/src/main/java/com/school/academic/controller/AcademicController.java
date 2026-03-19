@@ -27,7 +27,8 @@ public class AcademicController {
     @GetMapping("/exams/class/{classId}")
     public ResponseEntity<List<ExamResponse>> getExamsByClass(
             @PathVariable Long classId,
-            @RequestParam(defaultValue = "2025-26") String year) {
+            // ✅ FIX: was "2025-26" — frontend sends "2025-2026", must match
+            @RequestParam(defaultValue = "2025-2026") String year) {
         return ResponseEntity.ok(academicService.getExamsByClass(classId, year));
     }
 
@@ -73,14 +74,16 @@ public class AcademicController {
     @GetMapping("/results/student/{studentId}")
     public ResponseEntity<List<ResultResponse>> getStudentResults(
             @PathVariable Long studentId,
-            @RequestParam(defaultValue = "2025-26") String year) {
+            // ✅ FIX: was "2025-26" — frontend StudentResults.jsx sends "2025-2026"
+            @RequestParam(defaultValue = "2025-2026") String year) {
         return ResponseEntity.ok(academicService.getStudentResults(studentId, year));
     }
 
     @GetMapping("/report-card/{studentId}")
     public ResponseEntity<StudentReportCard> getReportCard(
             @PathVariable Long studentId,
-            @RequestParam(defaultValue = "2025-26") String year) {
+            // ✅ FIX: was "2025-26" — frontend sends "2025-2026"
+            @RequestParam(defaultValue = "2025-2026") String year) {
         return ResponseEntity.ok(academicService.generateReportCard(studentId, year));
     }
 }

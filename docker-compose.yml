@@ -26,7 +26,6 @@ services:
       ZOOKEEPER_SYNC_LIMIT: 2
     volumes:
       - zookeeper-data:/var/lib/zookeeper/data
-    # ✅ FIX 1: cub command broken tha — echo ruok se replace kiya
     healthcheck:
       test: ["CMD-SHELL", "echo ruok | nc localhost 2181 || exit 1"]
       interval: 20s
@@ -55,7 +54,6 @@ services:
       KAFKA_LOG_RETENTION_HOURS: 168
     volumes:
       - kafka-data:/var/lib/kafka/data
-    # ✅ FIX 2: cub kafka-ready broken tha — kafka-topics se replace kiya
     healthcheck:
       test: ["CMD-SHELL", "kafka-topics --bootstrap-server localhost:9092 --list || exit 1"]
       interval: 30s
@@ -263,7 +261,6 @@ services:
       - "8761:8761"
     environment:
       JAVA_OPTS: "-Xmx256m -Xms128m"
-    # ✅ FIX 3: grep UP add kiya — actually UP check karega
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8761/actuator/health | grep UP || exit 1"]
       interval: 20s
@@ -277,7 +274,6 @@ services:
       dockerfile: Dockerfile
     container_name: api-gateway
     restart: unless-stopped
-    # ✅ FIX 4: Port properly expose kiya — CORS fix hoga
     ports:
       - "8080:8080"
     depends_on:
@@ -337,10 +333,12 @@ services:
     restart: unless-stopped
     ports:
       - "8083:8083"
+    # ✅ FIX 1: kafka: was misindented under mysql-student's condition block.
+    #           Now correctly at the same level as mysql-student and eureka-server.
     depends_on:
       mysql-student:
         condition: service_healthy
-        kafka:                        
+      kafka:
         condition: service_healthy
       eureka-server:
         condition: service_healthy
@@ -519,8 +517,8 @@ services:
       MAIL_HOST: ${MAIL_HOST:-smtp.gmail.com}
       MAIL_PORT: ${MAIL_PORT:-587}
       MAIL_USER: ${MAIL_USER:-kpmedicalshop0@gmail.com}
-      MAIL_PASS: ${MAIL_PASS:-cwlj kapx jmwj cvdq}
-      # ✅ FIX 5: MAIL_ENABLED true — email ab jayegi
+      # ✅ Quoted to handle spaces correctly
+      MAIL_PASS: ${MAIL_PASS:-"cwlj kapx jmwj cvdq"}
       MAIL_ENABLED: "true"
       JAVA_OPTS: "-Xmx128m -Xms64m"
     healthcheck:
