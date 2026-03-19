@@ -340,7 +340,7 @@ services:
     depends_on:
       mysql-student:
         condition: service_healthy
-        kafka:                        # ← YE ADD KARO
+        kafka:                        
         condition: service_healthy
       eureka-server:
         condition: service_healthy
