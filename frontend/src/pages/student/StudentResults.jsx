@@ -18,7 +18,7 @@ const StudentResults = () => {
     const fetchResults = async () => {
       try {
         setLoading(true);
-        const res = await academicApi.getStudentResults(user?.id || 1, year);
+        const res = await academicApi.getStudentResults(user?.userId, year);
         setResults(res.data || []);
       } catch (e) {
         setResults([]);

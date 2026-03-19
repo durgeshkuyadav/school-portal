@@ -24,9 +24,10 @@ public class JwtService {
 
     public String generateToken(User user) {
         Map<String, Object> claims = new HashMap<>();
+         claims.put("username", user.getUsername());
         claims.put("role", user.getRole().name());
         claims.put("email", user.getEmail());
-        claims.put("profileId", user.getProfileId());
+        claims.put("profileId", user.getProfileId());   
         if (user.getClassId() != null) claims.put("classId", user.getClassId().toString());
         if (user.getSubjectIds() != null) claims.put("subjectIds", user.getSubjectIds());
 
