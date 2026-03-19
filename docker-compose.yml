@@ -59,7 +59,7 @@ services:
       interval: 30s
       timeout: 15s
       retries: 10
-      start_period: 60s
+      start_period: 120s
 
   redis:
     image: redis:7.2-alpine
@@ -347,7 +347,7 @@ services:
       DB_URL: jdbc:mysql://mysql-student:3306/school_student?createDatabaseIfNotExist=true&useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true&characterEncoding=UTF-8
       DB_USER: root
       DB_PASS: root
-      KAFKA_BOOTSTRAP: kafka:29092
+      KAFKA_BOOTSTRAP: kafka:9092 
       EUREKA_SERVER_URL: http://eureka-server:8761/eureka
       JAVA_OPTS: "-Xmx256m -Xms128m"
     healthcheck:
