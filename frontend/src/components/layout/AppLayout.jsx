@@ -20,6 +20,7 @@ import TaskAltIcon from '@mui/icons-material/TaskAlt';
 import GradeIcon from '@mui/icons-material/Grade';
 import NotificationsIcon from '@mui/icons-material/Notifications';
 import ScienceIcon from '@mui/icons-material/Science';
+import PhotoLibraryIcon from '@mui/icons-material/PhotoLibrary';   // ✅ Gallery icon
 import { logout, selectUser } from '../../store/slices/authSlice';
 import { useAppSettings } from '../../context/AppSettingsContext';
 import SettingsPanel from '../settings/SettingsPanel';
@@ -82,13 +83,14 @@ export default function AppLayout({ role }) {
       { labelKey:'scienceLab',    icon:<ScienceIcon/>,    path:'/teacher/lab',       emoji:'🔬' },
     ],
     admin: [
-      { labelKey:'dashboard',  icon:<DashboardIcon/>,     path:'/admin/dashboard',  emoji:'🏠' },
-      { labelKey:'students',   icon:<PeopleIcon/>,        path:'/admin/students',   emoji:'👨‍🎓' },
-      { labelKey:'teachers',   icon:<PersonIcon/>,        path:'/admin/teachers',   emoji:'👨‍🏫' },
-      { labelKey:'classes',    icon:<ClassIcon/>,         path:'/admin/classes',    emoji:'🏫' },
-      { labelKey:'calendar',   icon:<CalendarMonthIcon/>, path:'/admin/calendar',   emoji:'📅' },
-      { labelKey:'tasks',      icon:<TaskAltIcon/>,       path:'/admin/tasks',      emoji:'📋', badge:'new' },
-      { labelKey:'scienceLab', icon:<ScienceIcon/>,       path:'/admin/lab',        emoji:'🔬' },
+      { labelKey:'dashboard',  icon:<DashboardIcon/>,      path:'/admin/dashboard',  emoji:'🏠' },
+      { labelKey:'students',   icon:<PeopleIcon/>,         path:'/admin/students',   emoji:'👨‍🎓' },
+      { labelKey:'teachers',   icon:<PersonIcon/>,         path:'/admin/teachers',   emoji:'👨‍🏫' },
+      { labelKey:'classes',    icon:<ClassIcon/>,          path:'/admin/classes',    emoji:'🏫' },
+      { labelKey:'calendar',   icon:<CalendarMonthIcon/>,  path:'/admin/calendar',   emoji:'📅' },
+      { labelKey:'tasks',      icon:<TaskAltIcon/>,        path:'/admin/tasks',      emoji:'📋', badge:'new' },
+      { labelKey:'gallery',    icon:<PhotoLibraryIcon/>,   path:'/admin/gallery',    emoji:'🖼️' },  // ✅ NEW
+      { labelKey:'scienceLab', icon:<ScienceIcon/>,        path:'/admin/lab',        emoji:'🔬' },
     ],
   };
 
