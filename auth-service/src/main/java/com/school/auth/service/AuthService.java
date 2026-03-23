@@ -12,9 +12,12 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Isolation;
 
 import java.time.Instant;
+import java.time.Year;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 
 @Service
 @RequiredArgsConstructor
@@ -28,64 +31,56 @@ public class AuthService {
     @Value("${app.jwt.refresh-expiry-ms}")
     private long refreshExpiryMs;
 
-    @Transactional
+    // ── Login ────────────────────────────────────────────────────
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public AuthResponse login(LoginRequest request) {
         User user = userRepository.findByUsername(request.getUsername())
             .orElseThrow(() -> new AuthException("Invalid username or password"));
 
-        if (!user.isEnabled()) throw new AuthException("Account is disabled");
+        if (!user.isEnabled())          throw new AuthException("Account is disabled");
         if (!user.isAccountNonLocked()) throw new AuthException("Account is locked");
-        if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
+        if (!passwordEncoder.matches(request.getPassword(), user.getPassword()))
             throw new AuthException("Invalid username or password");
-        }
 
-        String accessToken = jwtService.generateToken(user);
+        String accessToken  = jwtService.generateToken(user);
         String refreshToken = createRefreshToken(user);
 
         return AuthResponse.builder()
-            .accessToken(accessToken)
-            .refreshToken(refreshToken)
-            .userId(user.getId())
-            .username(user.getUsername())
-            .email(user.getEmail())
-            .role(user.getRole().name())
-            .classId(user.getClassId())
-            .build();
+            .accessToken(accessToken).refreshToken(refreshToken)
+            .userId(user.getId()).username(user.getUsername())
+            .email(user.getEmail()).role(user.getRole().name())
+            .classId(user.getClassId()).build();
     }
 
-    @Transactional
+    // ── Refresh token ────────────────────────────────────────────
+    @Transactional(isolation = Isolation.REPEATABLE_READ)
     public AuthResponse refreshToken(RefreshRequest request) {
         RefreshToken rt = refreshTokenRepository.findByToken(request.getRefreshToken())
             .orElseThrow(() -> new AuthException("Invalid refresh token"));
-
         if (rt.isExpired()) {
             refreshTokenRepository.delete(rt);
             throw new AuthException("Refresh token expired. Please login again.");
         }
-
         User user = rt.getUser();
-        String newAccessToken = jwtService.generateToken(user);
-        String newRefreshToken = createRefreshToken(user);
+        String newAccess  = jwtService.generateToken(user);
+        String newRefresh = createRefreshToken(user);
         refreshTokenRepository.delete(rt);
-
         return AuthResponse.builder()
-            .accessToken(newAccessToken)
-            .refreshToken(newRefreshToken)
-            .userId(user.getId())
-            .username(user.getUsername())
-            .email(user.getEmail())
-            .role(user.getRole().name())
-            .classId(user.getClassId())
-            .build();
+            .accessToken(newAccess).refreshToken(newRefresh)
+            .userId(user.getId()).username(user.getUsername())
+            .email(user.getEmail()).role(user.getRole().name())
+            .classId(user.getClassId()).build();
     }
 
+    // ── Logout ──────────────────────────────────────────────────
     @Transactional
     public void logout(String refreshToken) {
         refreshTokenRepository.findByToken(refreshToken)
             .ifPresent(refreshTokenRepository::delete);
     }
 
-    @Transactional
+    // ── Register (manual — admin sets username/pass) ─────────────
+    @Transactional(isolation = Isolation.SERIALIZABLE)
     public UserResponse registerUser(RegisterRequest request) {
         if (userRepository.existsByUsername(request.getUsername()))
             throw new AuthException("Username already taken");
@@ -100,15 +95,94 @@ public class AuthService {
             .profileId(request.getProfileId())
             .classId(request.getClassId())
             .subjectIds(request.getSubjectIds())
-            .enabled(true)
-            .accountNonLocked(true)
-            .build();
+            .enabled(true).accountNonLocked(true).build();
 
-        User saved = userRepository.save(user);
-        return mapToUserResponse(saved);
+        return mapToUserResponse(userRepository.save(user));
     }
 
-    @Transactional
+    // ── AUTO-CREATE: Admin creates student → auto login ID ───────
+    // Format: STU + year(2) + sequential(3) e.g. STU26001
+    @Transactional(isolation = Isolation.SERIALIZABLE)
+    public UserCreatedResponse autoCreateStudentUser(AutoCreateRequest request) {
+        String year2 = String.valueOf(Year.now().getValue()).substring(2);
+        String prefix = "STU" + year2;
+
+        // Find next sequence number (thread-safe, SERIALIZABLE isolation)
+        long count = userRepository.countByUsernameStartingWith(prefix);
+        String username = prefix + String.format("%03d", count + 1);
+
+        // Ensure unique even if concurrent
+        while (userRepository.existsByUsername(username)) {
+            count++;
+            username = prefix + String.format("%03d", count + 1);
+        }
+
+        // Default password = username (student will change it)
+        String rawPassword = username;
+
+        User user = User.builder()
+            .username(username)
+            .email(request.getEmail() != null ? request.getEmail()
+                : username.toLowerCase() + "@vidyamandir.edu.in")
+            .password(passwordEncoder.encode(rawPassword))
+            .role(User.Role.STUDENT)
+            .profileId(request.getProfileId())
+            .classId(request.getClassId())
+            .enabled(true).accountNonLocked(true).build();
+
+        User saved = userRepository.save(user);
+        return UserCreatedResponse.builder()
+            .userId(saved.getId())
+            .username(saved.getUsername())
+            .defaultPassword(rawPassword)
+            .email(saved.getEmail())
+            .role(saved.getRole().name())
+            .message("Student login ID: " + username + " | Password: " + rawPassword)
+            .build();
+    }
+
+    // ── AUTO-CREATE: Admin creates teacher → auto login ID ───────
+    // Format: TCH + year(2) + sequential(3) e.g. TCH26001
+    @Transactional(isolation = Isolation.SERIALIZABLE)
+    public UserCreatedResponse autoCreateTeacherUser(AutoCreateRequest request) {
+        String year2 = String.valueOf(Year.now().getValue()).substring(2);
+        String prefix = "TCH" + year2;
+
+        long count = userRepository.countByUsernameStartingWith(prefix);
+        String username = prefix + String.format("%03d", count + 1);
+
+        while (userRepository.existsByUsername(username)) {
+            count++;
+            username = prefix + String.format("%03d", count + 1);
+        }
+
+        String rawPassword = username;
+
+        User user = User.builder()
+            .username(username)
+            .email(request.getEmail() != null ? request.getEmail()
+                : username.toLowerCase() + "@vidyamandir.edu.in")
+            .password(passwordEncoder.encode(rawPassword))
+            .role(request.getRole() != null
+                ? User.Role.valueOf(request.getRole()) : User.Role.CLASS_TEACHER)
+            .profileId(request.getProfileId())
+            .classId(request.getClassId())
+            .subjectIds(request.getSubjectIds())
+            .enabled(true).accountNonLocked(true).build();
+
+        User saved = userRepository.save(user);
+        return UserCreatedResponse.builder()
+            .userId(saved.getId())
+            .username(saved.getUsername())
+            .defaultPassword(rawPassword)
+            .email(saved.getEmail())
+            .role(saved.getRole().name())
+            .message("Teacher login ID: " + username + " | Password: " + rawPassword)
+            .build();
+    }
+
+    // ── Change password ──────────────────────────────────────────
+    @Transactional(isolation = Isolation.REPEATABLE_READ)
     public void changePassword(Long userId, ChangePasswordRequest request) {
         User user = userRepository.findById(userId)
             .orElseThrow(() -> new AuthException("User not found"));
@@ -118,25 +192,28 @@ public class AuthService {
         userRepository.save(user);
     }
 
+    // ── Get user credentials by ID (admin use) ──────────────────
+    @Transactional(readOnly = true)
+    public UserResponse getUserById(Long userId) {
+        User user = userRepository.findById(userId)
+            .orElseThrow(() -> new AuthException("User not found"));
+        return mapToUserResponse(user);
+    }
+
+    // ── Helpers ─────────────────────────────────────────────────
     private String createRefreshToken(User user) {
         refreshTokenRepository.deleteByUser(user);
         RefreshToken rt = RefreshToken.builder()
-            .user(user)
-            .token(UUID.randomUUID().toString())
-            .expiryDate(Instant.now().plusMillis(refreshExpiryMs))
-            .build();
+            .user(user).token(UUID.randomUUID().toString())
+            .expiryDate(Instant.now().plusMillis(refreshExpiryMs)).build();
         return refreshTokenRepository.save(rt).getToken();
     }
 
     private UserResponse mapToUserResponse(User user) {
         return UserResponse.builder()
-            .id(user.getId())
-            .username(user.getUsername())
-            .email(user.getEmail())
-            .role(user.getRole().name())
-            .classId(user.getClassId())
-            .enabled(user.isEnabled())
-            .createdAt(user.getCreatedAt())
-            .build();
+            .id(user.getId()).username(user.getUsername())
+            .email(user.getEmail()).role(user.getRole().name())
+            .classId(user.getClassId()).enabled(user.isEnabled())
+            .createdAt(user.getCreatedAt()).build();
     }
 }

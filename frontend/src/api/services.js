@@ -7,6 +7,9 @@ export const authApi = {
   refresh: (refreshToken) => apiClient.post('/auth/refresh', { refreshToken }),
   register: (userData) => apiClient.post('/auth/register', userData),
   changePassword: (data) => apiClient.put('/auth/password', data),
+  autoCreateStudent: (data) => apiClient.post('/auth/auto-create/student', data),
+  autoCreateTeacher: (data) => apiClient.post('/auth/auto-create/teacher', data),
+  getUserById: (id) => apiClient.get(`/auth/user/${id}`),
 };
 
 // ── CLASSES ───────────────────────────────────────────────────────
@@ -116,4 +119,12 @@ export const attendanceApi = {
   // Admin: monthly report
   getMonthlyReport: (classId, month, year) =>
     apiClient.get(`/attendance/class/${classId}/report?month=${month}&year=${year}`),
+};
+
+// ── PUBLIC CONTENT (gallery + articles — no login needed) ─────────
+export const publicApi = {
+  getContent: (type) => apiClient.get(`/content/public${type ? `?type=${type}` : ''}`),
+  getTeachers: () => apiClient.get('/teachers/public'),
+  getCalendarEvents: (month, year) => apiClient.get(`/calendar/public/events?month=${month}&year=${year}`),
+  getHolidays: () => apiClient.get('/calendar/public/holidays'),
 };

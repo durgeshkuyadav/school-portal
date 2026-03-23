@@ -52,6 +52,14 @@ import TakeAttendance from './pages/attendance/TakeAttendance';
 import MyAttendance from './pages/attendance/MyAttendance';
 import AttendanceReport from './pages/attendance/AttendanceReport';
 
+// New Features
+import FeeManagement from './pages/fees/FeeManagement';
+import Timetable from './pages/timetable/Timetable';
+import HomeworkTracker from './pages/homework/HomeworkTracker';
+import NoticeBoard from './pages/notices/NoticeBoard';
+import LibraryManagement from './pages/library/LibraryManagement';
+import TransportManagement from './pages/transport/TransportManagement';
+
 const ADMIN_ROLES   = ['SUPER_ADMIN', 'SCHOOL_ADMIN'];
 const TEACHER_ROLES = ['CLASS_TEACHER', 'SUBJECT_TEACHER', 'SCHOOL_ADMIN', 'SUPER_ADMIN'];
 
@@ -118,6 +126,12 @@ function AppRoutes() {
           <Route path="tests"      element={<OnlineTest />} />
           <Route path="profile"    element={<StudentProfile />} />
           <Route path="attendance" element={<MyAttendance />} />
+          <Route path="homework"   element={<HomeworkTracker />} />
+          <Route path="timetable"  element={<Timetable />} />
+          <Route path="notices"    element={<NoticeBoard />} />
+          <Route path="fees"       element={<FeeManagement />} />
+          <Route path="transport"  element={<TransportManagement />} />
+          <Route path="library"    element={<LibraryManagement />} />
           <Route path="lab"        element={<ScienceLab />} />
           <Route index element={<Navigate to="dashboard" replace />} />
         </Route>
@@ -134,6 +148,10 @@ function AppRoutes() {
           <Route path="content"    element={<UploadContent />} />
           <Route path="tasks"      element={<MyTasks />} />
           <Route path="attendance" element={<TakeAttendance />} />
+          <Route path="homework"   element={<HomeworkTracker />} />
+          <Route path="timetable"  element={<Timetable />} />
+          <Route path="notices"    element={<NoticeBoard />} />
+          <Route path="library"    element={<LibraryManagement />} />
           <Route path="profile"    element={<TeacherProfile />} />
           <Route path="lab"        element={<ScienceLab />} />
           <Route index element={<Navigate to="dashboard" replace />} />
@@ -153,6 +171,11 @@ function AppRoutes() {
           <Route path="tasks"      element={<ManageTasks />} />
           <Route path="gallery"    element={<AdminGallery />} />
           <Route path="attendance" element={<AttendanceReport />} />
+          <Route path="fees"       element={<FeeManagement />} />
+          <Route path="timetable"  element={<Timetable />} />
+          <Route path="notices"    element={<NoticeBoard />} />
+          <Route path="library"    element={<LibraryManagement />} />
+          <Route path="transport"  element={<TransportManagement />} />
           <Route path="lab"        element={<ScienceLab />} />
           <Route index element={<Navigate to="dashboard" replace />} />
         </Route>

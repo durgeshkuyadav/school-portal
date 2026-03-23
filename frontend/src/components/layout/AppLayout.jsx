@@ -23,6 +23,12 @@ import ScienceIcon from '@mui/icons-material/Science';
 import HowToRegIcon from '@mui/icons-material/HowToReg';
 import FactCheckIcon from '@mui/icons-material/FactCheck';
 import PhotoLibraryIcon from '@mui/icons-material/PhotoLibrary';
+import PaymentIcon from '@mui/icons-material/Payment';
+import CalendarViewWeekIcon from '@mui/icons-material/CalendarViewWeek';
+import AssignmentIcon from '@mui/icons-material/Assignment';
+import CampaignIcon from '@mui/icons-material/Campaign';
+import MenuBookIcon from '@mui/icons-material/MenuBook';
+import DirectionsBusIcon from '@mui/icons-material/DirectionsBus';
 import { logout, selectUser } from '../../store/slices/authSlice';
 import { useAppSettings } from '../../context/AppSettingsContext';
 import SettingsPanel from '../settings/SettingsPanel';
@@ -73,6 +79,12 @@ export default function AppLayout({ role }) {
       { labelKey:'content',    icon:<ArticleIcon/>,   path:'/student/content',   emoji:'📚' },
       { labelKey:'tests',      icon:<QuizIcon/>,      path:'/student/tests',     emoji:'🧪' },
       { labelKey:'attendance', icon:<HowToRegIcon/>,  path:'/student/attendance',emoji:'📅' },
+      { labelKey:'homework',   icon:<AssignmentIcon/>,path:'/student/homework',  emoji:'📝' },
+      { labelKey:'timetable',  icon:<CalendarViewWeekIcon/>,path:'/student/timetable',emoji:'🗓️' },
+      { labelKey:'notices',    icon:<CampaignIcon/>,  path:'/student/notices',   emoji:'📢' },
+      { labelKey:'fees',       icon:<PaymentIcon/>,   path:'/student/fees',      emoji:'💰' },
+      { labelKey:'library',    icon:<MenuBookIcon/>,  path:'/student/library',   emoji:'📚' },
+      { labelKey:'transport',  icon:<DirectionsBusIcon/>,path:'/student/transport',emoji:'🚌' },
       { labelKey:'profile',    icon:<PersonIcon/>,    path:'/student/profile',   emoji:'👤' },
       { labelKey:'scienceLab', icon:<ScienceIcon/>,   path:'/student/lab',       emoji:'🔬' },
     ],
@@ -83,6 +95,10 @@ export default function AppLayout({ role }) {
       { labelKey:'uploadContent', icon:<ArticleIcon/>,    path:'/teacher/content',   emoji:'📂' },
       { labelKey:'myTasks',       icon:<TaskAltIcon/>,    path:'/teacher/tasks',     emoji:'✅', badge:'new' },
       { labelKey:'attendance',    icon:<FactCheckIcon/>,  path:'/teacher/attendance',emoji:'📋' },
+      { labelKey:'homework',      icon:<AssignmentIcon/>, path:'/teacher/homework',  emoji:'📝' },
+      { labelKey:'timetable',     icon:<CalendarViewWeekIcon/>,path:'/teacher/timetable',emoji:'🗓️' },
+      { labelKey:'notices',       icon:<CampaignIcon/>,   path:'/teacher/notices',   emoji:'📢' },
+      { labelKey:'library',       icon:<MenuBookIcon/>,   path:'/teacher/library',   emoji:'📚' },
       { labelKey:'profile',       icon:<PersonIcon/>,     path:'/teacher/profile',   emoji:'👤' },
       { labelKey:'scienceLab',    icon:<ScienceIcon/>,    path:'/teacher/lab',       emoji:'🔬' },
     ],
@@ -93,9 +109,14 @@ export default function AppLayout({ role }) {
       { labelKey:'classes',    icon:<ClassIcon/>,         path:'/admin/classes',    emoji:'🏫' },
       { labelKey:'calendar',   icon:<CalendarMonthIcon/>, path:'/admin/calendar',   emoji:'📅' },
       { labelKey:'tasks',      icon:<TaskAltIcon/>,       path:'/admin/tasks',      emoji:'📋', badge:'new' },
-      { labelKey:'attendance', icon:<FactCheckIcon/>,     path:'/admin/attendance', emoji:'📊' },
-      { labelKey:'gallery',    icon:<PhotoLibraryIcon/>,  path:'/admin/gallery',    emoji:'🖼️' },
-      { labelKey:'scienceLab', icon:<ScienceIcon/>,       path:'/admin/lab',        emoji:'🔬' },
+      { labelKey:'attendance', icon:<FactCheckIcon/>,        path:'/admin/attendance', emoji:'📊' },
+      { labelKey:'gallery',    icon:<PhotoLibraryIcon/>,   path:'/admin/gallery',    emoji:'🖼️' },
+      { labelKey:'fees',       icon:<PaymentIcon/>,        path:'/admin/fees',       emoji:'💰' },
+      { labelKey:'timetable',  icon:<CalendarViewWeekIcon/>,path:'/admin/timetable', emoji:'🗓️' },
+      { labelKey:'notices',    icon:<CampaignIcon/>,       path:'/admin/notices',    emoji:'📢' },
+      { labelKey:'library',    icon:<MenuBookIcon/>,       path:'/admin/library',    emoji:'📚' },
+      { labelKey:'transport',  icon:<DirectionsBusIcon/>,  path:'/admin/transport',  emoji:'🚌' },
+      { labelKey:'scienceLab', icon:<ScienceIcon/>,        path:'/admin/lab',        emoji:'🔬' },
     ],
   };
 

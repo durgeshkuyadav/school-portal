@@ -72,6 +72,14 @@ spring:
             - StripPrefix=1
             - name: JwtAuthFilter
 
+        # Content Service — PUBLIC gallery+articles + PROTECTED upload
+        - id: content-service-public
+          uri: lb://content-service
+          predicates:
+            - Path=/api/content/public/**
+          filters:
+            - StripPrefix=1
+
         # Content Service — PROTECTED
         - id: content-service
           uri: lb://content-service

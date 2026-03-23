@@ -1,159 +1,227 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   Box, Typography, Card, CardContent, TextField, Button,
-  Select, MenuItem, FormControl, InputLabel, Alert, Snackbar, Grid
+  Select, MenuItem, FormControl, InputLabel, Alert, Grid,
+  CircularProgress, Chip, Tabs, Tab, Avatar, Divider
 } from '@mui/material';
 import UploadIcon from '@mui/icons-material/Upload';
+import ImageIcon from '@mui/icons-material/Image';
+import VideoLibraryIcon from '@mui/icons-material/VideoLibrary';
+import ArticleIcon from '@mui/icons-material/Article';
+import PhotoCameraIcon from '@mui/icons-material/PhotoCamera';
 import { contentApi } from '../../api/services';
 import { useSelector } from 'react-redux';
 import { selectUser } from '../../store/slices/authSlice';
+import { toast } from 'react-toastify';
+import { useAppSettings } from '../../context/AppSettingsContext';
 
-const UploadContent = () => {
+const CONTENT_TYPES = [
+  { value: 'PDF_NOTES',     label: '📄 PDF Notes',       tab: 0 },
+  { value: 'ASSIGNMENT',    label: '📝 Assignment',       tab: 0 },
+  { value: 'WORKSHEET',     label: '📋 Worksheet',        tab: 0 },
+  { value: 'IMAGE',         label: '🖼️ Image/Photo',     tab: 1 },
+  { value: 'GALLERY_PHOTO', label: '📸 Gallery Photo',    tab: 1 },
+  { value: 'VIDEO_LINK',    label: '🎥 Video Link',       tab: 2 },
+  { value: 'ARTICLE',       label: '📰 Article/Notice',  tab: 2 },
+];
+
+export default function UploadContent() {
   const user = useSelector(selectUser);
+  const { isDark } = useAppSettings();
+  const fileRef = useRef();
+  const [tab, setTab] = useState(0);
+  const [uploading, setUploading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [preview, setPreview] = useState(null);
+
   const [form, setForm] = useState({
     title: '', description: '', contentType: 'PDF_NOTES',
-    fileUrl: '', videoLink: '', classId: '', subjectId: ''
+    fileUrl: '', videoLink: '', classId: '', subjectId: '',
+    imageUrl: '',
   });
-  const [loading, setLoading] = useState(false);
-  const [snack, setSnack] = useState({ open: false, msg: '', severity: 'success' });
 
-  const showMsg = (msg, severity = 'success') => setSnack({ open: true, msg, severity });
+  const card = isDark ? '#161b27' : '#fff';
+  const bord = isDark ? '#2d3348' : '#e8eaf6';
+  const sub  = isDark ? '#8892a4' : '#64748b';
 
-  const handleChange = (field) => (e) => setForm({ ...form, [field]: e.target.value });
+  const isSubjectTeacher = user?.role === 'SUBJECT_TEACHER';
+  const tabTypes = CONTENT_TYPES.filter(t => t.tab === tab);
+
+  const handleImageSelect = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) { toast.error('Image 10MB se bada nahi hona chahiye'); return; }
+    setUploading(true);
+    const reader = new FileReader();
+    reader.onload = ev => {
+      setForm(f => ({ ...f, imageUrl: ev.target.result }));
+      setPreview(ev.target.result);
+      setUploading(false);
+    };
+    reader.readAsDataURL(file);
+  };
 
   const handleUpload = async () => {
-    if (!form.title || !form.classId) {
-      showMsg('Title aur Class ID zaroori hai!', 'error');
-      return;
-    }
-    setLoading(true);
+    if (!form.title) { setError('Title zaroori hai!'); return; }
+    if (!form.classId && tab !== 2) { setError('Class ID zaroori hai!'); return; }
+    setSaving(true); setError('');
     try {
       await contentApi.upload({
         ...form,
-        classId: Number(form.classId),
+        classId: form.classId ? Number(form.classId) : null,
         subjectId: form.subjectId ? Number(form.subjectId) : null,
       });
-      showMsg('✅ Content upload ho gaya! Students ab dekh sakte hain.');
-      setForm({ title: '', description: '', contentType: 'PDF_NOTES', fileUrl: '', videoLink: '', classId: '', subjectId: '' });
-    } catch {
-      showMsg('❌ Upload mein error aaya', 'error');
-    } finally {
-      setLoading(false);
-    }
+      toast.success('✅ Content upload ho gaya!');
+      setForm({ title:'', description:'', contentType:tabTypes[0]?.value||'PDF_NOTES',
+        fileUrl:'', videoLink:'', classId:'', subjectId:'', imageUrl:'' });
+      setPreview(null);
+    } catch (e) {
+      setError(e.response?.data?.error || 'Upload failed');
+    } finally { setSaving(false); }
   };
-
-  const isSubjectTeacher = user?.role === 'SUBJECT_TEACHER';
 
   return (
     <Box>
-      <Typography variant="h5" fontWeight="bold" mb={3} color="#1E3A5F">
-        📤 Content Upload Karo
+      <Typography variant="h5" fontWeight={800} mb={0.5}>📤 Content Upload</Typography>
+      <Typography fontSize={13} color={sub} mb={3}>
+        Notes, images, videos aur articles students ke liye upload karo
       </Typography>
 
       <Grid container spacing={3}>
         <Grid item xs={12} md={7}>
-          <Card elevation={2} sx={{ borderRadius: 2 }}>
-            <CardContent>
-              <TextField
-                fullWidth label="Title *" value={form.title}
-                onChange={handleChange('title')} sx={{ mb: 2 }}
-                placeholder="Jaise: Chapter 3 Notes, Math Assignment"
-              />
-              <TextField
-                fullWidth label="Description" value={form.description}
-                onChange={handleChange('description')}
-                sx={{ mb: 2 }} multiline rows={2}
-              />
-              <FormControl fullWidth sx={{ mb: 2 }}>
+          <Card sx={{ bgcolor: card, border: `1px solid ${bord}`, borderRadius: 3 }}>
+            {/* Tab selector */}
+            <Tabs value={tab} onChange={(_, v) => { setTab(v); setForm(f => ({ ...f, contentType: CONTENT_TYPES.find(t => t.tab === v)?.value || f.contentType })); }}
+              sx={{ borderBottom: `1px solid ${bord}`, '& .MuiTab-root': { fontWeight: 700 } }}>
+              <Tab icon={<ArticleIcon fontSize="small" />} iconPosition="start" label="Documents" />
+              <Tab icon={<ImageIcon fontSize="small" />} iconPosition="start" label="Images" />
+              <Tab icon={<VideoLibraryIcon fontSize="small" />} iconPosition="start" label="Videos & Articles" />
+            </Tabs>
+
+            <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              {error && <Alert severity="error">{error}</Alert>}
+
+              <FormControl fullWidth size="small">
                 <InputLabel>Content Type</InputLabel>
-                <Select value={form.contentType} label="Content Type" onChange={handleChange('contentType')}>
-                  <MenuItem value="PDF_NOTES">📄 PDF Notes</MenuItem>
-                  <MenuItem value="VIDEO_LINK">🎥 Video Link</MenuItem>
-                  <MenuItem value="IMAGE">🖼️ Image</MenuItem>
-                  <MenuItem value="ASSIGNMENT">📝 Assignment</MenuItem>
-                  <MenuItem value="WORKSHEET">📋 Worksheet</MenuItem>
+                <Select value={form.contentType} label="Content Type"
+                  onChange={e => setForm(f => ({ ...f, contentType: e.target.value }))}>
+                  {tabTypes.map(t => <MenuItem key={t.value} value={t.value}>{t.label}</MenuItem>)}
                 </Select>
               </FormControl>
 
-              {form.contentType === 'VIDEO_LINK' ? (
-                <TextField
-                  fullWidth label="Video Link (YouTube/Drive)" value={form.videoLink}
-                  onChange={handleChange('videoLink')} sx={{ mb: 2 }}
-                  placeholder="https://youtube.com/..."
-                />
-              ) : (
-                <TextField
-                  fullWidth label="File URL" value={form.fileUrl}
-                  onChange={handleChange('fileUrl')} sx={{ mb: 2 }}
-                  placeholder="File ka link daalo"
-                />
+              <TextField fullWidth label="Title *" value={form.title} size="small"
+                onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
+                placeholder="Jaise: Chapter 3 Notes, Sports Day Photos" />
+
+              <TextField fullWidth label="Description" multiline rows={2} value={form.description} size="small"
+                onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
+
+              {/* Tab 0 — Documents */}
+              {tab === 0 && (
+                <TextField fullWidth label="File URL (Google Drive / Dropbox link)" value={form.fileUrl} size="small"
+                  onChange={e => setForm(f => ({ ...f, fileUrl: e.target.value }))}
+                  placeholder="https://drive.google.com/..." />
               )}
 
-              <TextField
-                fullWidth label="Class ID *" value={form.classId}
-                onChange={handleChange('classId')} sx={{ mb: 2 }} type="number"
-                helperText="Apni class ka ID daalo"
-              />
-
-              {isSubjectTeacher && (
-                <TextField
-                  fullWidth label="Subject ID *" value={form.subjectId}
-                  onChange={handleChange('subjectId')} sx={{ mb: 2 }} type="number"
-                  helperText="Apne subject ka ID daalo (Subject Teacher ke liye zaroori)"
-                />
+              {/* Tab 1 — Images */}
+              {tab === 1 && (
+                <Box>
+                  <input ref={fileRef} type="file" accept="image/*" hidden onChange={handleImageSelect} />
+                  <Box onClick={() => fileRef.current.click()} sx={{
+                    border: `2px dashed ${preview ? '#2E7D32' : '#1565C0'}`,
+                    borderRadius: 3, p: 2, textAlign: 'center', cursor: 'pointer',
+                    bgcolor: preview ? '#E8F5E9' : (isDark ? '#1e2a3e' : '#f0f4ff'),
+                    mb: 1,
+                  }}>
+                    {uploading ? <CircularProgress size={28} /> :
+                     preview ? (
+                       <Box>
+                         <Box component="img" src={preview} sx={{ maxHeight: 160, maxWidth: '100%', borderRadius: 2, mb: 1 }} />
+                         <Typography fontSize={12} color="success.main" fontWeight={700}>✅ Image ready — click to change</Typography>
+                       </Box>
+                     ) : (
+                       <Box>
+                         <PhotoCameraIcon sx={{ fontSize: 40, color: '#1565C0', mb: 1 }} />
+                         <Typography fontWeight={600}>Click karke image select karo</Typography>
+                         <Typography variant="caption" color={sub}>JPG, PNG, WebP — max 10MB</Typography>
+                       </Box>
+                     )}
+                  </Box>
+                  <TextField fullWidth label="Ya Image URL daalo" value={form.imageUrl && !form.imageUrl.startsWith('data:') ? form.imageUrl : ''} size="small"
+                    onChange={e => { setForm(f => ({ ...f, imageUrl: e.target.value })); setPreview(e.target.value); }}
+                    placeholder="https://..." />
+                </Box>
               )}
 
-              <Button
-                fullWidth variant="contained" startIcon={<UploadIcon />}
-                onClick={handleUpload} disabled={loading} size="large"
-                sx={{ mt: 1, bgcolor: '#1E3A5F', py: 1.5 }}
-              >
-                {loading ? 'Upload Ho Raha Hai...' : 'Upload Karo'}
+              {/* Tab 2 — Videos & Articles */}
+              {tab === 2 && (
+                <TextField fullWidth label={form.contentType === 'VIDEO_LINK' ? 'YouTube / Drive Video URL' : 'Article Content / Notice Text'}
+                  value={form.contentType === 'VIDEO_LINK' ? form.videoLink : form.description}
+                  multiline={form.contentType !== 'VIDEO_LINK'}
+                  rows={form.contentType !== 'VIDEO_LINK' ? 4 : 1}
+                  size="small"
+                  onChange={e => form.contentType === 'VIDEO_LINK'
+                    ? setForm(f => ({ ...f, videoLink: e.target.value }))
+                    : setForm(f => ({ ...f, description: e.target.value }))}
+                  placeholder={form.contentType === 'VIDEO_LINK' ? 'https://youtube.com/...' : 'Notice ya article ka content yahan likhein...'} />
+              )}
+
+              <Grid container spacing={1.5}>
+                <Grid item xs={6}>
+                  <TextField fullWidth label="Class ID" value={form.classId} size="small" type="number"
+                    onChange={e => setForm(f => ({ ...f, classId: e.target.value }))}
+                    helperText="Admin se class ID lo" />
+                </Grid>
+                {isSubjectTeacher && (
+                  <Grid item xs={6}>
+                    <TextField fullWidth label="Subject ID *" value={form.subjectId} size="small" type="number"
+                      onChange={e => setForm(f => ({ ...f, subjectId: e.target.value }))} />
+                  </Grid>
+                )}
+              </Grid>
+
+              <Button fullWidth variant="contained" startIcon={<UploadIcon />}
+                onClick={handleUpload} disabled={saving} size="large"
+                sx={{ bgcolor: '#0A2E1A', py: 1.5, borderRadius: 2, fontWeight: 700 }}>
+                {saving ? <CircularProgress size={22} color="inherit" /> : '🚀 Upload Karo'}
               </Button>
             </CardContent>
           </Card>
         </Grid>
 
         <Grid item xs={12} md={5}>
-          <Card elevation={2} sx={{ borderRadius: 2, bgcolor: '#E8F5E9', border: '1px solid #27AE60' }}>
+          <Card sx={{ bgcolor: card, border: `1px solid ${bord}`, borderRadius: 3, mb: 2 }}>
             <CardContent>
-              <Typography variant="h6" fontWeight="bold" mb={2} color="#27AE60">
-                🔒 Visibility Rules
+              <Typography fontWeight={700} mb={1.5}>
+                {user?.role === 'CLASS_TEACHER' ? '📢 Class Teacher — Wide Access' : '🎯 Subject Teacher — Subject Focus'}
               </Typography>
-              {user?.role === 'CLASS_TEACHER' ? (
-                <>
-                  <Alert severity="info" sx={{ mb: 2 }}>
-                    Aap <strong>Class Teacher</strong> hain
-                  </Alert>
-                  <Typography color="text.secondary">
-                    Aapka content <strong>poori class ke sabhi students</strong> ko dikhega
-                  </Typography>
-                </>
-              ) : (
-                <>
-                  <Alert severity="warning" sx={{ mb: 2 }}>
-                    Aap <strong>Subject Teacher</strong> hain
-                  </Alert>
-                  <Typography color="text.secondary">
-                    Aapka content <strong>sirf us subject ke students</strong> ko dikhega jo aapka subject padhte hain
-                  </Typography>
-                </>
-              )}
+              <Alert severity={user?.role === 'CLASS_TEACHER' ? 'info' : 'warning'} sx={{ borderRadius: 2, mb: 2 }}>
+                {user?.role === 'CLASS_TEACHER'
+                  ? 'Aapka content poori class ke saare students dekh sakte hain'
+                  : 'Aapka content sirf us subject ke students ko dikhega'}
+              </Alert>
+              <Divider sx={{ my: 1.5 }} />
+              <Typography fontWeight={700} mb={1} fontSize={13}>Content Types:</Typography>
+              {CONTENT_TYPES.map(t => (
+                <Box key={t.value} sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                  <Chip label={t.label} size="small" variant="outlined" sx={{ fontSize: 11 }} />
+                </Box>
+              ))}
+            </CardContent>
+          </Card>
+
+          <Card sx={{ bgcolor: card, border: `1px solid ${bord}`, borderRadius: 3 }}>
+            <CardContent>
+              <Typography fontWeight={700} mb={1}>💡 Tips</Typography>
+              <Typography fontSize={12} color={sub} mb={0.5}>• Gallery photos public website pe bhi dikhenge</Typography>
+              <Typography fontSize={12} color={sub} mb={0.5}>• Articles/Notices poore school ko dikhenge</Typography>
+              <Typography fontSize={12} color={sub} mb={0.5}>• Images base64 ya URL dono kaam karte hain</Typography>
+              <Typography fontSize={12} color={sub}>• Video ke liye YouTube embed link use karo</Typography>
             </CardContent>
           </Card>
         </Grid>
       </Grid>
-
-      <Snackbar
-        open={snack.open} autoHideDuration={4000}
-        onClose={() => setSnack({ ...snack, open: false })}
-      >
-        <Alert severity={snack.severity} onClose={() => setSnack({ ...snack, open: false })}>
-          {snack.msg}
-        </Alert>
-      </Snackbar>
     </Box>
   );
-};
-
-export default UploadContent;
+}

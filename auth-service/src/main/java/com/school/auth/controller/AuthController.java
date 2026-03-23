@@ -6,51 +6,69 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
+import org.springframework.http.*;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/auth")
 @RequiredArgsConstructor
-@Tag(name = "Authentication", description = "Login, register, and token management")
+@Tag(name = "Authentication")
 public class AuthController {
 
     private final AuthService authService;
 
     @PostMapping("/login")
-    @Operation(summary = "Login and get JWT tokens")
-    public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request) {
-        return ResponseEntity.ok(authService.login(request));
+    public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest req) {
+        return ResponseEntity.ok(authService.login(req));
     }
 
     @PostMapping("/refresh")
-    @Operation(summary = "Refresh access token")
-    public ResponseEntity<AuthResponse> refresh(@Valid @RequestBody RefreshRequest request) {
-        return ResponseEntity.ok(authService.refreshToken(request));
+    public ResponseEntity<AuthResponse> refresh(@Valid @RequestBody RefreshRequest req) {
+        return ResponseEntity.ok(authService.refreshToken(req));
     }
 
     @PostMapping("/logout")
-    @Operation(summary = "Logout and invalidate refresh token")
-    public ResponseEntity<Void> logout(@RequestBody RefreshRequest request) {
-        authService.logout(request.getRefreshToken());
+    public ResponseEntity<Void> logout(@RequestBody RefreshRequest req) {
+        authService.logout(req.getRefreshToken());
         return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/register")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'SCHOOL_ADMIN')")
-    @Operation(summary = "Register a new user (Admin only)")
-    public ResponseEntity<UserResponse> register(@Valid @RequestBody RegisterRequest request) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(authService.registerUser(request));
+    public ResponseEntity<UserResponse> register(@Valid @RequestBody RegisterRequest req) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(authService.registerUser(req));
+    }
+
+    // ── Auto-create student login (called by student-service) ────
+    @PostMapping("/auto-create/student")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'SCHOOL_ADMIN')")
+    public ResponseEntity<UserCreatedResponse> autoCreateStudent(
+            @RequestBody AutoCreateRequest req) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+            .body(authService.autoCreateStudentUser(req));
+    }
+
+    // ── Auto-create teacher login (called by teacher-service) ────
+    @PostMapping("/auto-create/teacher")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'SCHOOL_ADMIN')")
+    public ResponseEntity<UserCreatedResponse> autoCreateTeacher(
+            @RequestBody AutoCreateRequest req) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+            .body(authService.autoCreateTeacherUser(req));
     }
 
     @PutMapping("/password")
-    @Operation(summary = "Change user password")
     public ResponseEntity<Void> changePassword(
         @RequestHeader("X-User-Id") Long userId,
-        @Valid @RequestBody ChangePasswordRequest request) {
-        authService.changePassword(userId, request);
+        @Valid @RequestBody ChangePasswordRequest req) {
+        authService.changePassword(userId, req);
         return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/user/{userId}")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'SCHOOL_ADMIN')")
+    public ResponseEntity<UserResponse> getUserById(@PathVariable Long userId) {
+        return ResponseEntity.ok(authService.getUserById(userId));
     }
 }
