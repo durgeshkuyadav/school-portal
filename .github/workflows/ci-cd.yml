@@ -24,6 +24,13 @@
 #   DEPLOY_SSH_KEY        : Private SSH key (PEM format)
 #   DEPLOY_PATH           : Path on server e.g. /home/ubuntu/school-portal
 # ═══════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════
+# SCHOOL PORTAL — CI/CD Pipeline (FIXED v2)
+# FIXES:
+#   ✅ secrets.DEPLOY_HOST in run: shell → now uses env var
+#   ✅ No duplicate summary job
+#   ✅ Changelog added to release
+# ═══════════════════════════════════════════════════════════════════
 
 name: 🏫 School Portal CI/CD
 
@@ -46,7 +53,6 @@ concurrency:
 
 jobs:
 
-# ─── JOB 1: Validate ──────────────────────────────────────────────
   validate:
     name: 🔍 Validate & Lint
     runs-on: ubuntu-latest
@@ -90,7 +96,6 @@ jobs:
               print("✅ All imports valid")
           PYEOF
 
-# ─── JOB 2: Build Backend (parallel) ─────────────────────────────
   build-backend:
     name: ☕ Build ${{ matrix.service }}
     runs-on: ubuntu-latest
@@ -133,7 +138,6 @@ jobs:
           path: ${{ matrix.service }}/target/*.jar
           retention-days: 1
 
-# ─── JOB 3: Build Frontend ────────────────────────────────────────
   build-frontend:
     name: ⚛️ Build Frontend
     runs-on: ubuntu-latest
@@ -165,7 +169,6 @@ jobs:
           path: frontend/build/
           retention-days: 1
 
-# ─── JOB 4: Docker Build & Push ───────────────────────────────────
   docker-build-push:
     name: 🐳 Docker ${{ matrix.service }}
     runs-on: ubuntu-latest
@@ -239,24 +242,26 @@ jobs:
           cache-from: type=gha,scope=${{ matrix.service }}
           cache-to:   type=gha,mode=max,scope=${{ matrix.service }}
 
-# ─── JOB 5: Deploy ────────────────────────────────────────────────
   deploy:
     name: 🚀 Deploy
     runs-on: ubuntu-latest
     needs: docker-build-push
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    env:
+      # ✅ FIX: Pass secrets as env vars so shell can read them safely
+      HAS_DEPLOY_HOST: ${{ secrets.DEPLOY_HOST != '' && 'true' || 'false' }}
     steps:
-      - name: Check deploy secrets
+      - name: Check deploy config
         id: check
         run: |
-          if [ -n "${{ secrets.DEPLOY_HOST }}" ]; then
-            echo "has_secrets=true" >> $GITHUB_OUTPUT
+          if [ "${HAS_DEPLOY_HOST}" = "true" ]; then
+            echo "has_server=true" >> $GITHUB_OUTPUT
           else
-            echo "has_secrets=false" >> $GITHUB_OUTPUT
+            echo "has_server=false" >> $GITHUB_OUTPUT
           fi
 
       - name: Deploy via SSH
-        if: steps.check.outputs.has_secrets == 'true'
+        if: steps.check.outputs.has_server == 'true'
         uses: appleboy/ssh-action@v1.0.3
         with:
           host:     ${{ secrets.DEPLOY_HOST }}
@@ -268,13 +273,14 @@ jobs:
             git pull origin main
             docker compose pull
             docker compose up -d --remove-orphans
-            echo "✅ Deployed!"
+            echo "✅ School Portal deployed successfully!"
 
-      - name: No server configured
-        if: steps.check.outputs.has_secrets == 'false'
-        run: echo "⚠️ Deploy skipped - no DEPLOY_HOST secret set. Add server secrets to enable auto-deploy."
+      - name: Skip notice
+        if: steps.check.outputs.has_server == 'false'
+        run: |
+          echo "⚠️ Auto-deploy skipped (no server configured)"
+          echo "Add DEPLOY_HOST, DEPLOY_USER, DEPLOY_SSH_KEY, DEPLOY_PATH to GitHub Secrets to enable."
 
-# ─── JOB 6: Release on tag ────────────────────────────────────────
   release:
     name: 📦 GitHub Release
     runs-on: ubuntu-latest
@@ -285,6 +291,21 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Generate changelog
+        id: changelog
+        run: |
+          PREV=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          if [ -n "$PREV" ]; then
+            CHANGES=$(git log ${PREV}..HEAD --pretty=format:"- %s (%h)" --no-merges | head -30)
+          else
+            CHANGES=$(git log --pretty=format:"- %s (%h)" --no-merges | head -20)
+          fi
+          {
+            echo 'changelog<<EOF'
+            echo "$CHANGES"
+            echo EOF
+          } >> $GITHUB_OUTPUT
+
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
@@ -292,46 +313,31 @@ jobs:
           body: |
             ## 🏫 School Portal ${{ github.ref_name }}
 
-            ### 🚀 Quick Start
+            ### 🚀 Quick Deploy
             ```bash
             git clone https://github.com/durgeshkuyadav/school-portal.git
             cd school-portal
             docker compose up -d
             ```
+
+            ### 📝 Changes
+            ${{ steps.changelog.outputs.changelog }}
           draft: false
-          prerelease: false
+          prerelease: ${{ contains(github.ref_name, '-rc') || contains(github.ref_name, '-beta') }}
 
-# ─── JOB 7: Summary ──────────────────────────────────────────────
   summary:
-    name: 📋 Summary
+    name: 📋 Pipeline Summary
     runs-on: ubuntu-latest
     needs: [ validate, build-backend, build-frontend ]
     if: always()
     steps:
       - name: Write summary
         run: |
-          echo "## 🏫 School Portal Pipeline Results" >> $GITHUB_STEP_SUMMARY
+          echo "## 🏫 School Portal — Pipeline" >> $GITHUB_STEP_SUMMARY
           echo "| Job | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
           echo "| 🔍 Validate | ${{ needs.validate.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| ☕ Build Backend | ${{ needs.build-backend.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| ⚛️ Build Frontend | ${{ needs.build-frontend.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Branch: \`${{ github.ref_name }}\` | Commit: \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
-
-  summary:
-    name: 📋 Summary
-    runs-on: ubuntu-latest
-    needs: [ validate, build-backend, build-frontend ]
-    if: always()
-    steps:
-      - name: Write summary
-        run: |
-          echo "## 🏫 School Portal Pipeline Results" >> $GITHUB_STEP_SUMMARY
-          echo "| Job | Status |" >> $GITHUB_STEP_SUMMARY
-          echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| 🔍 Validate | ${{ needs.validate.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| ☕ Build Backend | ${{ needs.build-backend.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| ⚛️ Build Frontend | ${{ needs.build-frontend.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Branch: \`${{ github.ref_name }}\` | Commit: \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "Branch: \`${{ github.ref_name }}\` | Actor: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
