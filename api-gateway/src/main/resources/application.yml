@@ -115,13 +115,21 @@ spring:
             - StripPrefix=1
             - name: JwtAuthFilter
 
+        # Attendance Service — PROTECTED
+        - id: attendance-service
+          uri: lb://attendance-service
+          predicates:
+            - Path=/api/attendance/**
+          filters:
+            - StripPrefix=1
+            - name: JwtAuthFilter
+
       # ── CORS ───────────────────────────────
       globalcors:
         cors-configurations:
           '[/**]':
-            allowedOrigins:
-              - "http://localhost:3000"
-              - "http://school-frontend:80"
+            allowedOriginPatterns:
+              - "*"
             allowedMethods:
               - GET
               - POST

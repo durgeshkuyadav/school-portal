@@ -47,6 +47,11 @@ import AdminGallery from './pages/admin/AdminGallery';
 // Science Lab
 import ScienceLab from './pages/ScienceLab';
 
+// Attendance
+import TakeAttendance from './pages/attendance/TakeAttendance';
+import MyAttendance from './pages/attendance/MyAttendance';
+import AttendanceReport from './pages/attendance/AttendanceReport';
+
 const ADMIN_ROLES   = ['SUPER_ADMIN', 'SCHOOL_ADMIN'];
 const TEACHER_ROLES = ['CLASS_TEACHER', 'SUBJECT_TEACHER', 'SCHOOL_ADMIN', 'SUPER_ADMIN'];
 
@@ -107,12 +112,13 @@ function AppRoutes() {
             <AppLayout role="student" />
           </ProtectedRoute>
         }>
-          <Route path="dashboard" element={<StudentDashboard />} />
-          <Route path="results"   element={<StudentResults />} />
-          <Route path="content"   element={<StudentContent />} />
-          <Route path="tests"     element={<OnlineTest />} />
-          <Route path="profile"   element={<StudentProfile />} />
-          <Route path="lab"       element={<ScienceLab />} />
+          <Route path="dashboard"  element={<StudentDashboard />} />
+          <Route path="results"    element={<StudentResults />} />
+          <Route path="content"    element={<StudentContent />} />
+          <Route path="tests"      element={<OnlineTest />} />
+          <Route path="profile"    element={<StudentProfile />} />
+          <Route path="attendance" element={<MyAttendance />} />
+          <Route path="lab"        element={<ScienceLab />} />
           <Route index element={<Navigate to="dashboard" replace />} />
         </Route>
 
@@ -122,13 +128,14 @@ function AppRoutes() {
             <AppLayout role="teacher" />
           </ProtectedRoute>
         }>
-          <Route path="dashboard" element={<TeacherDashboard />} />
-          <Route path="exams"     element={<ManageExams />} />
-          <Route path="results"   element={<ManageResults />} />
-          <Route path="content"   element={<UploadContent />} />
-          <Route path="tasks"     element={<MyTasks />} />
-          <Route path="profile"   element={<TeacherProfile />} />
-          <Route path="lab"       element={<ScienceLab />} />
+          <Route path="dashboard"  element={<TeacherDashboard />} />
+          <Route path="exams"      element={<ManageExams />} />
+          <Route path="results"    element={<ManageResults />} />
+          <Route path="content"    element={<UploadContent />} />
+          <Route path="tasks"      element={<MyTasks />} />
+          <Route path="attendance" element={<TakeAttendance />} />
+          <Route path="profile"    element={<TeacherProfile />} />
+          <Route path="lab"        element={<ScienceLab />} />
           <Route index element={<Navigate to="dashboard" replace />} />
         </Route>
 
@@ -138,14 +145,15 @@ function AppRoutes() {
             <AppLayout role="admin" />
           </ProtectedRoute>
         }>
-          <Route path="dashboard" element={<AdminDashboard />} />
-          <Route path="students"  element={<ManageStudents />} />
-          <Route path="teachers"  element={<ManageTeachers />} />
-          <Route path="classes"   element={<ManageClasses />} />
-          <Route path="calendar"  element={<AdminCalendar />} />
-          <Route path="tasks"     element={<ManageTasks />} />
-          <Route path="gallery"   element={<AdminGallery />} />
-          <Route path="lab"       element={<ScienceLab />} />
+          <Route path="dashboard"  element={<AdminDashboard />} />
+          <Route path="students"   element={<ManageStudents />} />
+          <Route path="teachers"   element={<ManageTeachers />} />
+          <Route path="classes"    element={<ManageClasses />} />
+          <Route path="calendar"   element={<AdminCalendar />} />
+          <Route path="tasks"      element={<ManageTasks />} />
+          <Route path="gallery"    element={<AdminGallery />} />
+          <Route path="attendance" element={<AttendanceReport />} />
+          <Route path="lab"        element={<ScienceLab />} />
           <Route index element={<Navigate to="dashboard" replace />} />
         </Route>
 

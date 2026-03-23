@@ -21,7 +21,7 @@ const TRANSLATIONS = {
   en: {
     // Navigation
     dashboard: 'Dashboard', students: 'Students', teachers: 'Teachers',
-    classes: 'Classes', calendar: 'Calendar', tasks: 'Task Management',
+    classes: 'Classes', calendar: 'Calendar', tasks: 'Task Management', gallery: 'Photo Gallery', attendance: 'Attendance',
     results: 'My Results', content: 'Study Materials', tests: 'Online Tests',
     exams: 'Manage Exams', updateResults: 'Update Results', uploadContent: 'Upload Content',
     myTasks: 'My Tasks', profile: 'My Profile', scienceLab: 'Science Lab',
@@ -71,7 +71,7 @@ const TRANSLATIONS = {
   hi: {
     // Navigation
     dashboard: 'डैशबोर्ड', students: 'छात्र', teachers: 'शिक्षक',
-    classes: 'कक्षाएं', calendar: 'कैलेंडर', tasks: 'कार्य प्रबंधन',
+    classes: 'कक्षाएं', calendar: 'कैलेंडर', tasks: 'कार्य प्रबंधन', gallery: 'फोटो गैलरी', attendance: 'उपस्थिति',
     results: 'मेरे परिणाम', content: 'अध्ययन सामग्री', tests: 'ऑनलाइन परीक्षण',
     exams: 'परीक्षा प्रबंधन', updateResults: 'परिणाम अपडेट करें', uploadContent: 'सामग्री अपलोड करें',
     myTasks: 'मेरे कार्य', profile: 'मेरी प्रोफ़ाइल', scienceLab: 'विज्ञान प्रयोगशाला',

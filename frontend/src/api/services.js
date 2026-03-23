@@ -91,3 +91,29 @@ export const taskApi = {
   deleteTask: (taskId) => apiClient.delete(`/students/tasks/${taskId}`),
   getStats: () => apiClient.get('/students/tasks/stats'),
 };
+
+// ── ATTENDANCE ────────────────────────────────────────────────────
+export const attendanceApi = {
+  // Teacher: poori class ka bulk attendance mark karo
+  markBulk: (data) => apiClient.post('/attendance/bulk', data),
+
+  // Teacher/Admin: ek din ki class attendance dekho
+  getClassByDate: (classId, date) =>
+    apiClient.get(`/attendance/class/${classId}/date/${date}`),
+
+  // Teacher: aaj ka status (marked hai ya nahi)
+  getTodayStatus: (classId) =>
+    apiClient.get(`/attendance/class/${classId}/today`),
+
+  // Student/Parent: attendance summary + percentage
+  getStudentSummary: (studentId, from, to) =>
+    apiClient.get(`/attendance/student/${studentId}/summary?from=${from}&to=${to}`),
+
+  // Student: attendance list (calendar ke liye)
+  getStudentList: (studentId, from, to) =>
+    apiClient.get(`/attendance/student/${studentId}?from=${from}&to=${to}`),
+
+  // Admin: monthly report
+  getMonthlyReport: (classId, month, year) =>
+    apiClient.get(`/attendance/class/${classId}/report?month=${month}&year=${year}`),
+};
