@@ -25,7 +25,6 @@ import FactCheckIcon from '@mui/icons-material/FactCheck';
 import PhotoLibraryIcon from '@mui/icons-material/PhotoLibrary';
 import PaymentIcon from '@mui/icons-material/Payment';
 import CalendarViewWeekIcon from '@mui/icons-material/CalendarViewWeek';
-import AssignmentIcon from '@mui/icons-material/Assignment';
 import CampaignIcon from '@mui/icons-material/Campaign';
 import MenuBookIcon from '@mui/icons-material/MenuBook';
 import DirectionsBusIcon from '@mui/icons-material/DirectionsBus';
