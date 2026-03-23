@@ -42,7 +42,7 @@ import ManageTeachers from './pages/admin/ManageTeachers';
 import ManageClasses from './pages/admin/ManageClasses';
 import AdminCalendar from './pages/admin/AdminCalendar';
 import ManageTasks from './pages/admin/ManageTasks';
-import AdminGallery from './pages/admin/AdminGallery';   // ✅ NEW
+import AdminGallery from './pages/admin/AdminGallery';
 
 // Science Lab
 import ScienceLab from './pages/ScienceLab';
@@ -50,6 +50,7 @@ import ScienceLab from './pages/ScienceLab';
 const ADMIN_ROLES   = ['SUPER_ADMIN', 'SCHOOL_ADMIN'];
 const TEACHER_ROLES = ['CLASS_TEACHER', 'SUBJECT_TEACHER', 'SCHOOL_ADMIN', 'SUPER_ADMIN'];
 
+/* ─── Theme factory — switches between light/dark ────────── */
 function createAppTheme(mode) {
   return createTheme({
     palette: {
@@ -96,7 +97,7 @@ function AppRoutes() {
         <Route path="/calendar" element={<SchoolCalendar />} />
         <Route path="/403"      element={<ForbiddenPage />} />
 
-        {/* ── LOGIN ── */}
+        {/* ── HIDDEN LOGIN ── */}
         <Route path="/portal-login" element={<LoginPage />} />
         <Route path="/login"        element={<LoginPage />} />
 
@@ -143,7 +144,7 @@ function AppRoutes() {
           <Route path="classes"   element={<ManageClasses />} />
           <Route path="calendar"  element={<AdminCalendar />} />
           <Route path="tasks"     element={<ManageTasks />} />
-          <Route path="gallery"   element={<AdminGallery />} />  {/* ✅ NEW */}
+          <Route path="gallery"   element={<AdminGallery />} />
           <Route path="lab"       element={<ScienceLab />} />
           <Route index element={<Navigate to="dashboard" replace />} />
         </Route>
@@ -151,7 +152,9 @@ function AppRoutes() {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
 
+      {/* Settings panel on public pages */}
       <SettingsPanel />
+
       <ToastContainer position="top-right" autoClose={3000}
         toastStyle={{ borderRadius:12, fontFamily:"'DM Sans',sans-serif", fontSize:14 }} />
     </ThemeProvider>
