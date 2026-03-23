@@ -2,14 +2,15 @@ import React, { useState } from 'react';
 import {
   Box, Typography, Card, CardContent, Grid, Button, TextField,
   Dialog, DialogTitle, DialogContent, DialogActions, MenuItem,
-  Chip, Avatar, Divider, IconButton, Tooltip, Table, TableBody,
-  TableCell, TableContainer, TableHead, TableRow, Paper, Alert, Tabs, Tab
+  Chip, Avatar, Divider, IconButton, Table, TableBody,
+  TableCell, TableContainer, TableHead, TableRow, Paper, Tabs, Tab,
+  Alert
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import DirectionsBusIcon from '@mui/icons-material/DirectionsBus';
 import LocationOnIcon from '@mui/icons-material/LocationOn';
-import PersonIcon from '@mui/icons-material/Person';
 import DeleteIcon from '@mui/icons-material/Delete';
+import PersonIcon from '@mui/icons-material/Person';
 import { useSelector } from 'react-redux';
 import { selectUser } from '../../store/slices/authSlice';
 import { toast } from 'react-toastify';
@@ -111,6 +112,20 @@ export default function TransportManagement() {
       </Tabs>
 
       {tab === 0 && (
+        data.routes.length === 0 ? (
+          <Card sx={{ bgcolor:card, border:`1px solid ${bord}`, borderRadius:3 }}>
+            <CardContent sx={{ textAlign:'center', py:6 }}>
+              <DirectionsBusIcon sx={{ fontSize:60, color:sub, mb:2 }}/>
+              <Typography color={sub} mb={2}>Koi route nahi mila</Typography>
+              {isAdmin && (
+                <Button variant="contained" startIcon={<AddIcon/>}
+                  onClick={() => setRouteDialog(true)} sx={{ bgcolor:'#1565C0', borderRadius:2 }}>
+                  Pehla Route Add Karo
+                </Button>
+              )}
+            </CardContent>
+          </Card>
+        ) : (
         <Grid container spacing={2.5}>
           {data.routes.map((route, i) => {
             const color = ROUTE_COLORS[i % ROUTE_COLORS.length];
@@ -162,13 +177,13 @@ export default function TransportManagement() {
                     </Box>
                     {route.stops && route.stops.length > 0 && (
                       <Box>
-                        <Typography fontSize={11} color={sub} mb:.5>🛑 Stops:</Typography>
+                        <Typography fontSize={11} color={sub} sx={{ mb:0.5 }}>🛑 Stops:</Typography>
                         <Box sx={{ display:'flex', gap:.5, flexWrap:'wrap' }}>
                           {route.stops.map((stop, si) => (
                             <Box key={si} sx={{ display:'flex', alignItems:'center', gap:.3 }}>
                               <LocationOnIcon sx={{ fontSize:12, color }} />
                               <Typography fontSize={11} color={sub}>{stop}</Typography>
-                              {si < route.stops.length - 1 && <Typography fontSize:10 color={sub}>→</Typography>}
+                              {si < route.stops.length - 1 && <Typography sx={{ fontSize:10 }} color={sub}>→</Typography>}
                             </Box>
                           ))}
                         </Box>
@@ -180,6 +195,7 @@ export default function TransportManagement() {
             );
           })}
         </Grid>
+        )
       )}
 
       {tab === 1 && (
