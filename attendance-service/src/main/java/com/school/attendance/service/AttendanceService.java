@@ -66,11 +66,13 @@ public class AttendanceService {
 
         return ClassDaySummary.builder()
             .classId(classId)
+                .className(className)
             .date(date)
             .totalStudents(records.size())
             .present((int) present)
             .absent((int) absent)
             .late((int) late)
+                .halfDay((int)halfDay)
             .alreadyMarked(marked)
             .records(records.stream().map(this::mapToResponse).collect(Collectors.toList()))
             .build();

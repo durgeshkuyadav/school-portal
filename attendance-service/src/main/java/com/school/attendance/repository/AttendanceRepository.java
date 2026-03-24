@@ -52,4 +52,7 @@ public interface AttendanceRepository extends JpaRepository<Attendance, Long> {
     // All students absent on a date
     List<Attendance> findByClassIdAndAttendanceDateAndStatus(
         Long classId, LocalDate date, Attendance.AttendanceStatus status);
+    // Add this method to repo
+    List<Attendance> findByStudentIdAndClassIdAndAttendanceDateBetween(
+            Long studentId, Long classId, LocalDate from, LocalDate to);
 }

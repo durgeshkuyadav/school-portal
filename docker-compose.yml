@@ -1,423 +1,519 @@
-volumes:
-  mysql-auth-data:
-  mysql-student-data:
-  mysql-academic-data:
-  mysql-teacher-data:
-  mysql-calendar-data:
-  mysql-test-data:
-  mysql-attendance-data:
-  mongo-content-data:
-  redis-data:
-  kafka-data:
-  zookeeper-data:
+# ═══════════════════════════════════════════════════════════════
+# SCHOOL PORTAL — Optimized docker-compose.yml
+# Memory-tuned for a ~8GB RAM dev machine
+# Total reserved: ~3.5 GB  |  Hard limit: ~5.2 GB
+# ═══════════════════════════════════════════════════════════════
+#
+# MEMORY STRATEGY per service type:
+#   Java Spring Boot  → -XX:+UseContainerSupport sets heap from container limit
+#                       -XX:MaxRAMPercentage=65 uses 65% of limit for heap
+#                       Remaining ~35% goes to metaspace, threads, NIO buffers
+#   MySQL             → innodb_buffer_pool_size = ~60% of container limit
+#   MongoDB           → wiredTigerCacheSizeGB = explicit small value
+#   Redis             → maxmemory directive
+#   Kafka/ZooKeeper   → KAFKA_HEAP_OPTS sets JVM heap directly
+#   Nginx (frontend)  → very light, 64 MB is plenty
+#
+# SWAP NOTE: mem_swappiness in deploy.resources only works on Docker Swarm.
+#   For local dev use `docker-compose up` — limits still apply via cgroups.
+#
+# HOW TO TUNE:
+#   If a service OOMKills, raise its memory.limit by 128m steps.
+#   If your machine has <8 GB RAM, scale everything down by ~25%.
+# ═══════════════════════════════════════════════════════════════
+
+networks:
+  school-net:
+    driver: bridge
+
+# ── Shared JVM flags (referenced via YAML anchor) ───────────────
+x-java-opts: &java-opts
+  JAVA_TOOL_OPTIONS: >-
+    -XX:+UseContainerSupport
+    -XX:MaxRAMPercentage=65.0
+    -XX:InitialRAMPercentage=40.0
+    -XX:+UseG1GC
+    -XX:MaxGCPauseMillis=200
+    -XX:+ExitOnOutOfMemoryError
+    -Djava.security.egd=file:/dev/./urandom
 
 services:
 
-  # ─────────────────────────────────────────────
-  # INFRASTRUCTURE
-  # ─────────────────────────────────────────────
+  # ── INFRASTRUCTURE ─────────────────────────────────────────────
 
   zookeeper:
     image: confluentinc/cp-zookeeper:7.6.1
     container_name: zookeeper
-    restart: unless-stopped
-    init: true
+    networks: [school-net]
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
-      ZOOKEEPER_SYNC_LIMIT: 2
-    volumes:
-      - zookeeper-data:/var/lib/zookeeper/data
+      # ZooKeeper JVM heap — 128 MB is enough for dev
+      KAFKA_HEAP_OPTS: "-Xms64m -Xmx128m"
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+        reservations:
+          memory: 128m
     healthcheck:
-      test: ["CMD-SHELL", "cub zk-ready localhost:2181 30 || exit 1"]
+      test: ["CMD", "bash", "-c", "echo ruok | nc localhost 2181"]
       interval: 30s
-      timeout: 30s
-      retries: 10
-      start_period: 60s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
 
   kafka:
     image: confluentinc/cp-kafka:7.6.1
     container_name: kafka
-    restart: unless-stopped
-    init: true
+    networks: [school-net]
+    ports:
+      - "9092:9092"
     depends_on:
       zookeeper:
         condition: service_healthy
-    ports:
-      - "9092:9092"
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
-      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
-      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
-      KAFKA_LOG_RETENTION_HOURS: 168
-    volumes:
-      - kafka-data:/var/lib/kafka/data
+      KAFKA_LOG_RETENTION_HOURS: 24
+      KAFKA_LOG_SEGMENT_BYTES: 536870912
+      # Cap Kafka JVM heap — 384 MB is sufficient for dev workloads
+      KAFKA_HEAP_OPTS: "-Xms192m -Xmx384m"
+      # Reduce background thread overhead
+      KAFKA_NUM_NETWORK_THREADS: 2
+      KAFKA_NUM_IO_THREADS: 4
+      KAFKA_SOCKET_SEND_BUFFER_BYTES: 102400
+      KAFKA_SOCKET_RECEIVE_BUFFER_BYTES: 102400
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+        reservations:
+          memory: 256m
     healthcheck:
-      test: ["CMD-SHELL", "cub kafka-ready -b localhost:9092 1 30 || exit 1"]
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
       interval: 30s
-      timeout: 30s
-      retries: 10
-      start_period: 90s
+      timeout: 15s
+      retries: 5
+      start_period: 40s
+    restart: unless-stopped
 
   redis:
     image: redis:7.2-alpine
     container_name: redis
-    restart: unless-stopped
+    networks: [school-net]
     ports:
       - "6379:6379"
-    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
-    volumes:
-      - redis-data:/data
+    # maxmemory = 75% of container limit (75% of 128m ≈ 96 MB)
+    command: >
+      redis-server
+      --maxmemory 96mb
+      --maxmemory-policy allkeys-lru
+      --save ""
+      --appendonly no
+      --hz 10
+      --lazyfree-lazy-eviction yes
+    deploy:
+      resources:
+        limits:
+          memory: 128m
+        reservations:
+          memory: 64m
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
-      interval: 15s
+      interval: 20s
       timeout: 5s
       retries: 5
+      start_period: 10s
+    restart: unless-stopped
 
-  # ─────────────────────────────────────────────
-  # DATABASES — MySQL 8.0
-  # ─────────────────────────────────────────────
+  # ── DATABASES ──────────────────────────────────────────────────
 
   mysql-auth:
     image: mysql:8.0
     container_name: mysql-auth
-    restart: unless-stopped
+    networks: [school-net]
     ports:
-      - "3307:3306"                             # 3307 taaki local MySQL se conflict na ho
+      - "3307:3306"
     environment:
-      MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: school_auth
-      MYSQL_USER: school_user
-      MYSQL_PASSWORD: school_pass
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpass}
+      MYSQL_DATABASE: auth_db
+    command: >
+      --innodb-buffer-pool-size=96M
+      --innodb-log-file-size=32M
+      --max-connections=50
+      --performance-schema=OFF
+      --skip-log-bin
+      --table-open-cache=200
+      --thread-cache-size=4
     volumes:
       - mysql-auth-data:/var/lib/mysql
-    command: --default-authentication-plugin=mysql_native_password
-             --character-set-server=utf8mb4
-             --collation-server=utf8mb4_unicode_ci
-             --innodb-buffer-pool-size=128M
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+        reservations:
+          memory: 128m
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot"]
-      interval: 15s
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-rootpass}"]
+      interval: 30s
       timeout: 10s
-      retries: 10
-      start_period: 90s
+      retries: 5
+      start_period: 40s
+    restart: unless-stopped
 
   mysql-student:
     image: mysql:8.0
     container_name: mysql-student
-    restart: unless-stopped
+    networks: [school-net]
     ports:
       - "3308:3306"
     environment:
-      MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: school_student
-      MYSQL_USER: school_user
-      MYSQL_PASSWORD: school_pass
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpass}
+      MYSQL_DATABASE: student_db
+    command: >
+      --innodb-buffer-pool-size=96M
+      --innodb-log-file-size=32M
+      --max-connections=50
+      --performance-schema=OFF
+      --skip-log-bin
+      --table-open-cache=200
+      --thread-cache-size=4
     volumes:
       - mysql-student-data:/var/lib/mysql
-    command: --default-authentication-plugin=mysql_native_password
-             --character-set-server=utf8mb4
-             --collation-server=utf8mb4_unicode_ci
-             --innodb-buffer-pool-size=64M
-             --max-connections=100
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+        reservations:
+          memory: 128m
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot"]
-      interval: 20s
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-rootpass}"]
+      interval: 30s
       timeout: 10s
-      retries: 10
-      start_period: 90s
+      retries: 5
+      start_period: 40s
+    restart: unless-stopped
 
   mysql-academic:
     image: mysql:8.0
     container_name: mysql-academic
-    restart: unless-stopped
+    networks: [school-net]
     ports:
       - "3309:3306"
     environment:
-      MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: school_academic
-      MYSQL_USER: school_user
-      MYSQL_PASSWORD: school_pass
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpass}
+      MYSQL_DATABASE: academic_db
+    command: >
+      --innodb-buffer-pool-size=96M
+      --innodb-log-file-size=32M
+      --max-connections=50
+      --performance-schema=OFF
+      --skip-log-bin
+      --table-open-cache=200
+      --thread-cache-size=4
     volumes:
       - mysql-academic-data:/var/lib/mysql
-    command: --default-authentication-plugin=mysql_native_password
-             --character-set-server=utf8mb4
-             --collation-server=utf8mb4_unicode_ci
-             --innodb-buffer-pool-size=64M
-             --max-connections=100
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+        reservations:
+          memory: 128m
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot"]
-      interval: 20s
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-rootpass}"]
+      interval: 30s
       timeout: 10s
-      retries: 10
-      start_period: 90s
+      retries: 5
+      start_period: 40s
+    restart: unless-stopped
 
   mysql-teacher:
     image: mysql:8.0
     container_name: mysql-teacher
-    restart: unless-stopped
+    networks: [school-net]
     ports:
       - "3310:3306"
     environment:
-      MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: school_teacher
-      MYSQL_USER: school_user
-      MYSQL_PASSWORD: school_pass
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpass}
+      MYSQL_DATABASE: teacher_db
+    command: >
+      --innodb-buffer-pool-size=96M
+      --innodb-log-file-size=32M
+      --max-connections=50
+      --performance-schema=OFF
+      --skip-log-bin
+      --table-open-cache=200
+      --thread-cache-size=4
     volumes:
       - mysql-teacher-data:/var/lib/mysql
-    command: --default-authentication-plugin=mysql_native_password
-             --character-set-server=utf8mb4
-             --collation-server=utf8mb4_unicode_ci
-             --innodb-buffer-pool-size=64M
-             --max-connections=100
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+        reservations:
+          memory: 128m
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot"]
-      interval: 20s
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-rootpass}"]
+      interval: 30s
       timeout: 10s
-      retries: 10
-      start_period: 90s
+      retries: 5
+      start_period: 40s
+    restart: unless-stopped
 
   mysql-calendar:
     image: mysql:8.0
     container_name: mysql-calendar
-    restart: unless-stopped
+    networks: [school-net]
     ports:
       - "3311:3306"
     environment:
-      MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: school_calendar
-      MYSQL_USER: school_user
-      MYSQL_PASSWORD: school_pass
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpass}
+      MYSQL_DATABASE: calendar_db
+    command: >
+      --innodb-buffer-pool-size=96M
+      --innodb-log-file-size=32M
+      --max-connections=50
+      --performance-schema=OFF
+      --skip-log-bin
+      --table-open-cache=200
+      --thread-cache-size=4
     volumes:
       - mysql-calendar-data:/var/lib/mysql
-    command: --default-authentication-plugin=mysql_native_password
-             --character-set-server=utf8mb4
-             --collation-server=utf8mb4_unicode_ci
-             --innodb-buffer-pool-size=64M
-             --max-connections=100
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+        reservations:
+          memory: 128m
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot"]
-      interval: 20s
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-rootpass}"]
+      interval: 30s
       timeout: 10s
-      retries: 10
-      start_period: 90s
+      retries: 5
+      start_period: 40s
+    restart: unless-stopped
 
   mysql-test:
     image: mysql:8.0
     container_name: mysql-test
-    restart: unless-stopped
+    networks: [school-net]
     ports:
       - "3312:3306"
     environment:
-      MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: school_test
-      MYSQL_USER: school_user
-      MYSQL_PASSWORD: school_pass
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpass}
+      MYSQL_DATABASE: test_db
+    command: >
+      --innodb-buffer-pool-size=96M
+      --innodb-log-file-size=32M
+      --max-connections=50
+      --performance-schema=OFF
+      --skip-log-bin
+      --table-open-cache=200
+      --thread-cache-size=4
     volumes:
       - mysql-test-data:/var/lib/mysql
-    command: --default-authentication-plugin=mysql_native_password
-             --character-set-server=utf8mb4
-             --collation-server=utf8mb4_unicode_ci
-             --innodb-buffer-pool-size=64M
-             --max-connections=100
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+        reservations:
+          memory: 128m
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot"]
-      interval: 20s
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-rootpass}"]
+      interval: 30s
       timeout: 10s
-      retries: 10
-      start_period: 90s
+      retries: 5
+      start_period: 40s
+    restart: unless-stopped
 
   mongo-content:
     image: mongo:7.0
     container_name: mongo-content
-    restart: unless-stopped
+    networks: [school-net]
+    ports:
+      - "27017:27017"
     environment:
-      MONGO_INITDB_DATABASE: school_content
+      MONGO_INITDB_DATABASE: content_db
+    # wiredTigerCacheSizeGB = ~50% of container limit
+    # 0.25 GB = 256 MB cache inside a 512 MB container
+    command: >
+      mongod
+      --wiredTigerCacheSizeGB 0.25
+      --bind_ip_all
     volumes:
       - mongo-content-data:/data/db
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+        reservations:
+          memory: 256m
     healthcheck:
-      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')", "--quiet"]
-      interval: 20s
-      timeout: 15s
-      retries: 10
-      start_period: 60s
+      # mongo:7.0 uses mongosh — not the old mongo shell
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping').ok", "--quiet"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+    restart: unless-stopped
 
-  # ─────────────────────────────────────────────
-  # MICROSERVICES
-  # ─────────────────────────────────────────────
+  # ── JAVA MICROSERVICES ──────────────────────────────────────────
+  # Each service gets 384 MB limit.
+  # With MaxRAMPercentage=65 → JVM heap ≈ 250 MB.
+  # Metaspace + threads + NIO use the remaining ~134 MB.
+  # If any service OOMKills, raise its limit to 512m.
 
   eureka-server:
-    build:
-      context: ./eureka-server
-      dockerfile: Dockerfile
+    image: school-portal-eureka-server
     container_name: eureka-server
-    restart: unless-stopped
+    networks: [school-net]
     ports:
       - "8761:8761"
+    environment:
+      <<: *java-opts
+    deploy:
+      resources:
+        limits:
+          memory: 384m
+        reservations:
+          memory: 192m
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8761/actuator/health || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8761/actuator/health | grep -q UP || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 5
       start_period: 60s
+    restart: unless-stopped
 
   api-gateway:
-    build:
-      context: ./api-gateway
-      dockerfile: Dockerfile
+    image: school-portal-api-gateway
     container_name: api-gateway
-    restart: unless-stopped
+    networks: [school-net]
     ports:
       - "8080:8080"
     depends_on:
       eureka-server:
         condition: service_healthy
     environment:
-      SPRING_PROFILES_ACTIVE: docker
-      EUREKA_SERVER_URL: http://eureka-server:8761/eureka
-      JWT_SECRET: ${JWT_SECRET:-schoolPortalSecretKey2026VeryLongAndSecure}
-      JAVA_OPTS: "-Xmx192m -Xms64m -XX:+UseSerialGC -XX:MaxMetaspaceSize=128m -XX:+TieredCompilation -XX:TieredStopAtLevel=1"
+      <<: *java-opts
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+    deploy:
+      resources:
+        limits:
+          memory: 384m
+        reservations:
+          memory: 192m
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep -q UP || exit 1"]
       interval: 30s
-      timeout: 15s
-      retries: 10
-      start_period: 90s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    restart: unless-stopped
 
   auth-service:
-    build:
-      context: ./auth-service
-      dockerfile: Dockerfile
+    image: school-portal-auth-service
     container_name: auth-service
-    restart: unless-stopped
+    networks: [school-net]
     ports:
       - "8081:8081"
     depends_on:
       mysql-auth:
         condition: service_healthy
-      redis:
-        condition: service_healthy
       eureka-server:
         condition: service_healthy
     environment:
-      SPRING_PROFILES_ACTIVE: docker
-      DB_URL: jdbc:mysql://mysql-auth:3306/school_auth?createDatabaseIfNotExist=true&useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true&characterEncoding=UTF-8
-      DB_USER: root
-      DB_PASS: root
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
-      EUREKA_SERVER_URL: http://eureka-server:8761/eureka
-      JWT_SECRET: ${JWT_SECRET:-schoolPortalSecretKey2026VeryLongAndSecure}
-      JWT_EXPIRY_MS: 3600000
-      JWT_REFRESH_EXPIRY_MS: 604800000
-      SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: 2
-      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: 10
-      JAVA_OPTS: "-Xmx192m -Xms64m -XX:+UseSerialGC -XX:MaxMetaspaceSize=128m -XX:+TieredCompilation -XX:TieredStopAtLevel=1"
+      <<: *java-opts
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql-auth:3306/auth_db?useSSL=false&allowPublicKeyRetrieval=true
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpass}
+    deploy:
+      resources:
+        limits:
+          memory: 384m
+        reservations:
+          memory: 192m
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8081/actuator/health || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8081/actuator/health | grep -q UP || exit 1"]
       interval: 30s
-      timeout: 15s
-      retries: 15
-      start_period: 180s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
+    restart: unless-stopped
 
   student-service:
-    build:
-      context: ./student-service
-      dockerfile: Dockerfile
+    image: school-portal-student-service
     container_name: student-service
-    restart: unless-stopped
+    networks: [school-net]
     ports:
       - "8083:8083"
     depends_on:
       mysql-student:
         condition: service_healthy
-      kafka:
-        condition: service_healthy
       eureka-server:
         condition: service_healthy
     environment:
-      SPRING_PROFILES_ACTIVE: docker
-      DB_URL: jdbc:mysql://mysql-student:3306/school_student?createDatabaseIfNotExist=true&useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true&characterEncoding=UTF-8
-      DB_USER: root
-      DB_PASS: root
-      KAFKA_BOOTSTRAP: kafka:29092
-      EUREKA_SERVER_URL: http://eureka-server:8761/eureka
-      JAVA_OPTS: "-Xmx192m -Xms64m -XX:+UseSerialGC -XX:MaxMetaspaceSize=128m -XX:+TieredCompilation -XX:TieredStopAtLevel=1"
+      <<: *java-opts
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql-student:3306/student_db?useSSL=false&allowPublicKeyRetrieval=true
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpass}
+    deploy:
+      resources:
+        limits:
+          memory: 384m
+        reservations:
+          memory: 192m
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8083/actuator/health || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8083/actuator/health | grep -q UP || exit 1"]
       interval: 30s
-      timeout: 15s
-      retries: 15
-      start_period: 180s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
+    restart: unless-stopped
 
   academic-service:
-    build:
-      context: ./academic-service
-      dockerfile: Dockerfile
+    image: school-portal-academic-service
     container_name: academic-service
-    restart: unless-stopped
+    networks: [school-net]
     ports:
       - "8084:8084"
     depends_on:
       mysql-academic:
         condition: service_healthy
-      kafka:
-        condition: service_healthy
       eureka-server:
         condition: service_healthy
     environment:
-      SPRING_PROFILES_ACTIVE: docker
-      DB_URL: jdbc:mysql://mysql-academic:3306/school_academic?createDatabaseIfNotExist=true&useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true&characterEncoding=UTF-8
-      DB_USER: root
-      DB_PASS: root
-      KAFKA_BOOTSTRAP: kafka:29092
-      EUREKA_SERVER_URL: http://eureka-server:8761/eureka
-      JAVA_OPTS: "-Xmx192m -Xms64m -XX:+UseSerialGC -XX:MaxMetaspaceSize=128m -XX:+TieredCompilation -XX:TieredStopAtLevel=1"
+      <<: *java-opts
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql-academic:3306/academic_db?useSSL=false&allowPublicKeyRetrieval=true
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpass}
+    deploy:
+      resources:
+        limits:
+          # 512m because academic-service had slow start — likely heavier migrations
+          memory: 512m
+        reservations:
+          memory: 256m
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8084/actuator/health || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8084/actuator/health | grep -q UP || exit 1"]
       interval: 30s
-      timeout: 15s
-      retries: 15
+      timeout: 10s
+      retries: 5
+      # Extended start period — this service was still starting after 9 min
       start_period: 180s
-
-  teacher-service:
-    build:
-      context: ./teacher-service
-      dockerfile: Dockerfile
-    container_name: teacher-service
     restart: unless-stopped
-    ports:
-      - "8086:8086"
-    depends_on:
-      mysql-teacher:
-        condition: service_healthy
-      eureka-server:
-        condition: service_healthy
-    environment:
-      SPRING_PROFILES_ACTIVE: docker
-      DB_URL: jdbc:mysql://mysql-teacher:3306/school_teacher?createDatabaseIfNotExist=true&useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true&characterEncoding=UTF-8
-      DB_USER: root
-      DB_PASS: root
-      EUREKA_SERVER_URL: http://eureka-server:8761/eureka
-      JAVA_OPTS: "-Xmx192m -Xms64m -XX:+UseSerialGC -XX:MaxMetaspaceSize=128m -XX:+TieredCompilation -XX:TieredStopAtLevel=1"
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8086/actuator/health || exit 1"]
-      interval: 30s
-      timeout: 15s
-      retries: 15
-      start_period: 180s
 
   content-service:
-    build:
-      context: ./content-service
-      dockerfile: Dockerfile
+    image: school-portal-content-service
     container_name: content-service
-    restart: unless-stopped
+    networks: [school-net]
     ports:
       - "8085:8085"
     depends_on:
@@ -426,23 +522,58 @@ services:
       eureka-server:
         condition: service_healthy
     environment:
-      SPRING_PROFILES_ACTIVE: docker
-      MONGO_URI: mongodb://mongo-content:27017/school_content
-      EUREKA_SERVER_URL: http://eureka-server:8761/eureka
-      JAVA_OPTS: "-Xmx192m -Xms64m -XX:+UseSerialGC -XX:MaxMetaspaceSize=128m -XX:+TieredCompilation -XX:TieredStopAtLevel=1"
+      <<: *java-opts
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      SPRING_DATA_MONGODB_URI: mongodb://mongo-content:27017/content_db
+    deploy:
+      resources:
+        limits:
+          memory: 384m
+        reservations:
+          memory: 192m
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8085/actuator/health || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8085/actuator/health | grep -q UP || exit 1"]
       interval: 30s
-      timeout: 15s
-      retries: 15
-      start_period: 180s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
+    restart: unless-stopped
+
+  teacher-service:
+    image: school-portal-teacher-service
+    container_name: teacher-service
+    networks: [school-net]
+    ports:
+      - "8086:8086"
+    depends_on:
+      mysql-teacher:
+        condition: service_healthy
+      eureka-server:
+        condition: service_healthy
+    environment:
+      <<: *java-opts
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql-teacher:3306/teacher_db?useSSL=false&allowPublicKeyRetrieval=true
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpass}
+    deploy:
+      resources:
+        limits:
+          memory: 384m
+        reservations:
+          memory: 192m
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8086/actuator/health | grep -q UP || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
+    restart: unless-stopped
 
   calendar-service:
-    build:
-      context: ./calendar-service
-      dockerfile: Dockerfile
+    image: school-portal-calendar-service
     container_name: calendar-service
-    restart: unless-stopped
+    networks: [school-net]
     ports:
       - "8087:8087"
     depends_on:
@@ -451,56 +582,29 @@ services:
       eureka-server:
         condition: service_healthy
     environment:
-      SPRING_PROFILES_ACTIVE: docker
-      DB_URL: jdbc:mysql://mysql-calendar:3306/school_calendar?createDatabaseIfNotExist=true&useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true&characterEncoding=UTF-8
-      DB_USER: root
-      DB_PASS: root
-      EUREKA_SERVER_URL: http://eureka-server:8761/eureka
-      JAVA_OPTS: "-Xmx192m -Xms64m -XX:+UseSerialGC -XX:MaxMetaspaceSize=128m -XX:+TieredCompilation -XX:TieredStopAtLevel=1"
+      <<: *java-opts
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql-calendar:3306/calendar_db?useSSL=false&allowPublicKeyRetrieval=true
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpass}
+    deploy:
+      resources:
+        limits:
+          memory: 384m
+        reservations:
+          memory: 192m
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8087/actuator/health || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8087/actuator/health | grep -q UP || exit 1"]
       interval: 30s
-      timeout: 15s
-      retries: 15
-      start_period: 180s
-
-  online-test-service:
-    build:
-      context: ./online-test-service
-      dockerfile: Dockerfile
-    container_name: online-test-service
+      timeout: 10s
+      retries: 5
+      start_period: 90s
     restart: unless-stopped
-    ports:
-      - "8091:8091"
-    depends_on:
-      mysql-test:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      eureka-server:
-        condition: service_healthy
-    environment:
-      SPRING_PROFILES_ACTIVE: docker
-      DB_URL: jdbc:mysql://mysql-test:3306/school_test?createDatabaseIfNotExist=true&useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true&characterEncoding=UTF-8
-      DB_USER: root
-      DB_PASS: root
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
-      EUREKA_SERVER_URL: http://eureka-server:8761/eureka
-      JAVA_OPTS: "-Xmx192m -Xms64m -XX:+UseSerialGC -XX:MaxMetaspaceSize=128m -XX:+TieredCompilation -XX:TieredStopAtLevel=1"
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8091/actuator/health || exit 1"]
-      interval: 30s
-      timeout: 15s
-      retries: 15
-      start_period: 180s
 
   notification-service:
-    build:
-      context: ./notification-service
-      dockerfile: Dockerfile
+    image: school-portal-notification-service
     container_name: notification-service
-    restart: unless-stopped
+    networks: [school-net]
     ports:
       - "8089:8089"
     depends_on:
@@ -509,93 +613,87 @@ services:
       eureka-server:
         condition: service_healthy
     environment:
-      SPRING_PROFILES_ACTIVE: docker
-      KAFKA_BOOTSTRAP: kafka:29092
-      EUREKA_SERVER_URL: http://eureka-server:8761/eureka
-      MAIL_HOST: ${MAIL_HOST:-smtp.gmail.com}
-      MAIL_PORT: ${MAIL_PORT:-587}
-      MAIL_USER: ${MAIL_USER:-your@gmail.com}
-      MAIL_PASS: ${MAIL_PASS:-yourpassword}
-      JAVA_OPTS: "-Xmx128m -Xms48m -XX:+UseSerialGC -XX:MaxMetaspaceSize=96m -XX:+TieredCompilation -XX:TieredStopAtLevel=1"
+      <<: *java-opts
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    deploy:
+      resources:
+        limits:
+          memory: 384m
+        reservations:
+          memory: 192m
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8089/actuator/health || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8089/actuator/health | grep -q UP || exit 1"]
       interval: 30s
-      timeout: 15s
-      retries: 15
-      start_period: 180s
-
-  # ─────────────────────────────────────────────
-  # ATTENDANCE SERVICE
-  # ─────────────────────────────────────────────
-
-  mysql-attendance:
-    image: mysql:8.0
-    container_name: mysql-attendance
+      timeout: 10s
+      retries: 5
+      start_period: 90s
     restart: unless-stopped
-    ports:
-      - "3313:3306"
-    environment:
-      MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: school_attendance
-      MYSQL_USER: school_user
-      MYSQL_PASSWORD: school_pass
-    volumes:
-      - mysql-attendance-data:/var/lib/mysql
-    command: --default-authentication-plugin=mysql_native_password
-             --character-set-server=utf8mb4
-             --collation-server=utf8mb4_unicode_ci
-             --innodb-buffer-pool-size=64M
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot"]
-      interval: 10s
-      timeout: 5s
-      retries: 15
-      start_period: 150s
 
-  attendance-service:
-    build:
-      context: ./attendance-service
-      dockerfile: Dockerfile
-    container_name: attendance-service
-    restart: unless-stopped
+  online-test-service:
+    image: school-portal-online-test-service
+    container_name: online-test-service
+    networks: [school-net]
     ports:
-      - "8092:8092"
+      - "8091:8091"
     depends_on:
-      mysql-attendance:
+      mysql-test:
         condition: service_healthy
       eureka-server:
         condition: service_healthy
     environment:
-      SPRING_PROFILES_ACTIVE: docker
-      DB_URL: jdbc:mysql://mysql-attendance:3306/school_attendance?createDatabaseIfNotExist=true&useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true&characterEncoding=UTF-8
-      DB_USER: root
-      DB_PASS: root
-      EUREKA_SERVER_URL: http://eureka-server:8761/eureka
-      JAVA_OPTS: "-Xmx192m -Xms64m -XX:+UseSerialGC -XX:MaxMetaspaceSize=128m"
+      <<: *java-opts
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql-test:3306/test_db?useSSL=false&allowPublicKeyRetrieval=true
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpass}
+    deploy:
+      resources:
+        limits:
+          memory: 384m
+        reservations:
+          memory: 192m
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8092/actuator/health || exit 1"]
-      interval: 20s
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8091/actuator/health | grep -q UP || exit 1"]
+      interval: 30s
       timeout: 10s
-      retries: 15
-      start_period: 180s
-
-  # ─────────────────────────────────────────────
-  # FRONTEND
-  # ─────────────────────────────────────────────
-
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    container_name: school-frontend
+      retries: 5
+      start_period: 90s
     restart: unless-stopped
+
+  # ── FRONTEND ───────────────────────────────────────────────────
+
+  school-frontend:
+    image: school-portal-frontend
+    container_name: school-frontend
+    networks: [school-net]
     ports:
       - "3000:80"
     depends_on:
       api-gateway:
         condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          # Nginx is extremely light — 64 MB is generous
+          memory: 64m
+        reservations:
+          memory: 32m
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:80 || exit 1"]
+      # Hits the /health endpoint defined in nginx.conf
+      test: ["CMD-SHELL", "wget -qO- http://localhost/health || exit 1"]
       interval: 30s
-      timeout: 10s
+      timeout: 5s
       retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+# ── VOLUMES ────────────────────────────────────────────────────
+volumes:
+  mysql-auth-data:
+  mysql-student-data:
+  mysql-academic-data:
+  mysql-teacher-data:
+  mysql-calendar-data:
+  mysql-test-data:
+  mongo-content-data:
