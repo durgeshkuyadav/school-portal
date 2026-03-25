@@ -272,3 +272,5 @@ docker compose up -d --build
 - RAM check karo: Docker needs ~6GB
 - `docker compose logs SERVICE_NAME` se error dekho
 
+#   v e d s a r - r e a l t y  
+ 
