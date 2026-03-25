@@ -32,6 +32,7 @@ import TeacherDashboard from './pages/teacher/TeacherDashboard';
 import ManageResults from './pages/teacher/ManageResults';
 import UploadContent from './pages/teacher/UploadContent';
 import ManageExams from './pages/teacher/ManageExams';
+import CreateOnlineTest from './pages/teacher/CreateOnlineTest';
 import MyTasks from './pages/teacher/MyTasks';
 import TeacherProfile from './pages/teacher/TeacherProfile';
 
@@ -144,6 +145,7 @@ function AppRoutes() {
         }>
           <Route path="dashboard"  element={<TeacherDashboard />} />
           <Route path="exams"      element={<ManageExams />} />
+          <Route path="online-test" element={<CreateOnlineTest />} />
           <Route path="results"    element={<ManageResults />} />
           <Route path="content"    element={<UploadContent />} />
           <Route path="tasks"      element={<MyTasks />} />

@@ -18,6 +18,10 @@ public class AuthController {
 
     private final AuthService authService;
 
+    public AuthController(AuthService authService) {
+        this.authService = authService;
+    }
+
     @PostMapping("/login")
     public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest req) {
         return ResponseEntity.ok(authService.login(req));
@@ -70,5 +74,13 @@ public class AuthController {
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'SCHOOL_ADMIN')")
     public ResponseEntity<UserResponse> getUserById(@PathVariable Long userId) {
         return ResponseEntity.ok(authService.getUserById(userId));
+    }
+
+    // ── Check if any student credentials conflict with teachers ──
+    @GetMapping("/check-conflicts")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'SCHOOL_ADMIN')")
+    @Operation(summary = "Check if any student ID/password matches a teacher's")
+    public ResponseEntity<java.util.Map<String, Object>> checkCredentialConflicts() {
+        return ResponseEntity.ok(authService.checkCredentialConflicts());
     }
 }

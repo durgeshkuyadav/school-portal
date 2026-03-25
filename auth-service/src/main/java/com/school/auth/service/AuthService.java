@@ -17,7 +17,9 @@ import org.springframework.transaction.annotation.Isolation;
 import java.time.Instant;
 import java.time.Year;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.List;
+import java.util.Map;
+import java.util.HashMap;
 
 @Service
 @RequiredArgsConstructor
@@ -27,6 +29,13 @@ public class AuthService {
     private final RefreshTokenRepository refreshTokenRepository;
     private final JwtService jwtService;
     private final PasswordEncoder passwordEncoder;
+    public AuthService(UserRepository userRepository, RefreshTokenRepository refreshTokenRepository,
+                   JwtService jwtService, PasswordEncoder passwordEncoder) {
+    this.userRepository = userRepository;
+    this.refreshTokenRepository = refreshTokenRepository;
+    this.jwtService = jwtService;
+    this.passwordEncoder = passwordEncoder;
+}
 
     @Value("${app.jwt.refresh-expiry-ms}")
     private long refreshExpiryMs;
@@ -198,6 +207,56 @@ public class AuthService {
         User user = userRepository.findById(userId)
             .orElseThrow(() -> new AuthException("User not found"));
         return mapToUserResponse(user);
+    }
+
+    // ── Check credential conflicts between students & teachers ──
+    // Returns a map with conflict info: any student username == teacher username
+    // or any student whose default password (same as username) matches a teacher's
+    @Transactional(readOnly = true)
+    public Map<String, Object> checkCredentialConflicts() {
+        List<User> students = userRepository.findByRole(User.Role.STUDENT);
+        List<User> teachers = new java.util.ArrayList<>();
+        teachers.addAll(userRepository.findByRole(User.Role.CLASS_TEACHER));
+        teachers.addAll(userRepository.findByRole(User.Role.SUBJECT_TEACHER));
+
+        Map<String, Object> result = new HashMap<>();
+        List<Map<String, String>> conflicts = new java.util.ArrayList<>();
+
+        // Check: no student username should match any teacher username
+        java.util.Set<String> teacherUsernames = new java.util.HashSet<>();
+        java.util.Set<String> teacherEmails = new java.util.HashSet<>();
+        for (User t : teachers) {
+            teacherUsernames.add(t.getUsername());
+            teacherEmails.add(t.getEmail());
+        }
+
+        for (User s : students) {
+            if (teacherUsernames.contains(s.getUsername())) {
+                Map<String, String> c = new HashMap<>();
+                c.put("type", "USERNAME_MATCH");
+                c.put("studentUsername", s.getUsername());
+                c.put("message", "Student username matches a teacher username: " + s.getUsername());
+                conflicts.add(c);
+            }
+            if (teacherEmails.contains(s.getEmail())) {
+                Map<String, String> c = new HashMap<>();
+                c.put("type", "EMAIL_MATCH");
+                c.put("studentUsername", s.getUsername());
+                c.put("studentEmail", s.getEmail());
+                c.put("message", "Student email matches a teacher email: " + s.getEmail());
+                conflicts.add(c);
+            }
+        }
+
+        result.put("totalStudents", students.size());
+        result.put("totalTeachers", teachers.size());
+        result.put("conflictsFound", conflicts.size());
+        result.put("conflicts", conflicts);
+        result.put("safe", conflicts.isEmpty());
+        result.put("message", conflicts.isEmpty()
+            ? "✅ No credential conflicts. Student IDs and Teacher IDs are completely separate."
+            : "⚠️ Found " + conflicts.size() + " credential conflicts!");
+        return result;
     }
 
     // ── Helpers ─────────────────────────────────────────────────

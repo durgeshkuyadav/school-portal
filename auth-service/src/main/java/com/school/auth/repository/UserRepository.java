@@ -12,4 +12,5 @@ public interface UserRepository extends JpaRepository<User, Long> {
     boolean existsByUsername(String username);
     boolean existsByEmail(String email);
     long countByUsernameStartingWith(String prefix);  // ← for sequential ID generation
+    java.util.List<User> findByRole(User.Role role);
 }

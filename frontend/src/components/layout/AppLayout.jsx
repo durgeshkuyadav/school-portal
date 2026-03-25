@@ -90,6 +90,7 @@ export default function AppLayout({ role }) {
     teacher: [
       { labelKey:'dashboard',     icon:<DashboardIcon/>,  path:'/teacher/dashboard', emoji:'🏠' },
       { labelKey:'exams',         icon:<AssignmentIcon/>, path:'/teacher/exams',     emoji:'📝' },
+      { labelKey:'onlineTest',    icon:<QuizIcon/>,       path:'/teacher/online-test', emoji:'🧪', badge:'new' },
       { labelKey:'updateResults', icon:<GradeIcon/>,      path:'/teacher/results',   emoji:'📊' },
       { labelKey:'uploadContent', icon:<ArticleIcon/>,    path:'/teacher/content',   emoji:'📂' },
       { labelKey:'myTasks',       icon:<TaskAltIcon/>,    path:'/teacher/tasks',     emoji:'✅', badge:'new' },

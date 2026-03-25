@@ -4,6 +4,7 @@ import com.school.onlinetest.entity.*;
 import com.school.onlinetest.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.*;
 
@@ -23,7 +24,19 @@ public class TestService {
         return testRepository.findById(id).orElseThrow(() -> new RuntimeException("Test not found: " + id));
     }
 
+    @Transactional
+    @SuppressWarnings("unchecked")
     public Test createTest(Map<String, Object> req, Long userId) {
+        // Parse optional datetime fields
+        LocalDateTime startsAt = null;
+        LocalDateTime endsAt = null;
+        if (req.get("startsAt") != null && !req.get("startsAt").toString().isBlank()) {
+            startsAt = LocalDateTime.parse(req.get("startsAt").toString());
+        }
+        if (req.get("endsAt") != null && !req.get("endsAt").toString().isBlank()) {
+            endsAt = LocalDateTime.parse(req.get("endsAt").toString());
+        }
+
         Test test = Test.builder()
                 .title((String) req.get("title"))
                 .subjectName((String) req.get("subjectName"))
@@ -34,7 +47,31 @@ public class TestService {
                 .passingMarks(req.get("passingMarks") != null ? Integer.parseInt(req.get("passingMarks").toString()) : 5)
                 .createdByUserId(userId)
                 .isActive(true)
+                .startsAt(startsAt)
+                .endsAt(endsAt)
                 .build();
+
+        // Parse and attach questions from the request
+        List<Map<String, Object>> questionList = (List<Map<String, Object>>) req.get("questions");
+        if (questionList != null && !questionList.isEmpty()) {
+            List<Question> questions = new ArrayList<>();
+            for (Map<String, Object> qMap : questionList) {
+                Question q = Question.builder()
+                        .test(test)
+                        .questionText((String) qMap.get("questionText"))
+                        .optionA((String) qMap.get("optionA"))
+                        .optionB((String) qMap.get("optionB"))
+                        .optionC((String) qMap.get("optionC"))
+                        .optionD((String) qMap.get("optionD"))
+                        .correctOption((String) qMap.get("correctOption"))
+                        .marks(qMap.get("marks") != null ? Integer.parseInt(qMap.get("marks").toString()) : 1)
+                        .orderIndex(qMap.get("orderIndex") != null ? Integer.parseInt(qMap.get("orderIndex").toString()) : null)
+                        .build();
+                questions.add(q);
+            }
+            test.setQuestions(questions);
+        }
+
         return testRepository.save(test);
     }
 

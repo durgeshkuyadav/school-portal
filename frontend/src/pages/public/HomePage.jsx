@@ -710,7 +710,7 @@ export default function HomePage() {
 
         <div className="nav-center">
           {[['events','📅 Events'],['calendar','🗓 Calendar'],['photos','📸 Gallery'],
-            ['notifications','🔔 Notice'],['teachers','👨‍🏫 Faculty'],['schools','🔗 Links']].map(([id,lbl])=>(
+            ['notifications','🔔 Notice'],['teachers','👨‍🏫 Faculty']].map(([id,lbl])=>(
             <button key={id} className={`nav-btn${active===id?' active':''}`} onClick={()=>goTo(id)}>{lbl}</button>
           ))}
         </div>
@@ -802,6 +802,7 @@ export default function HomePage() {
 
           <div className="sb-hr"/>
 
+          {/* Partner Schools — DISABLED
           <div className="sb-section">
             <div className="sb-section-title">Partner Schools</div>
             <button className={`sb-item${active==='schools'?' active':''}`} onClick={()=>goTo('schools')}>
@@ -813,6 +814,7 @@ export default function HomePage() {
               ))}
             </div>
           </div>
+          */}
 
           <div className="sb-hr"/>
 
@@ -972,7 +974,7 @@ export default function HomePage() {
             </div>
           </section>
 
-          {/* SCHOOLS */}
+          {/* SCHOOLS — DISABLED
           <section id="schools" className="sec">
             <div className="sec-head">
               <div className="sec-eye">Network</div>
@@ -990,6 +992,7 @@ export default function HomePage() {
               ))}
             </div>
           </section>
+          */}
 
           {/* CONTACT */}
           <div className="contact-strip">
@@ -1010,7 +1013,7 @@ export default function HomePage() {
           </div>
           <div>
             <div className="ft-col-title">Quick Links</div>
-            {['Events','Calendar','Gallery','Notices','Teachers','Schools'].map(l=>(
+            {['Events','Calendar','Gallery','Notices','Teachers'].map(l=>(
               <button key={l} className="ft-link" onClick={()=>goTo(l.toLowerCase().replace(' ',''))}>{l}</button>
             ))}
           </div>
